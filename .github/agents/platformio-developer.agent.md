@@ -26,6 +26,29 @@ project and its hardware constraints.
 - Keep secrets out of source control and avoid hard-coding credentials.
 - Add or update tests and documentation when behavior changes.
 
+## Skills
+
+- [`develop-feature`](../skills/develop-feature/SKILL.md): Use for every
+  request to implement a new feature or enhancement. It covers discovery,
+  implementation, tests, documentation, build, validation, and error
+  resolution.
+- [`write-or-update-tests`](../skills/write-or-update-tests/SKILL.md): Use
+  when adding or updating tests, including during feature development.
+
+## Feature development steps
+
+For each step, follow the corresponding instructions in the `develop-feature`
+skill:
+
+1. Understand the requirements and inspect the relevant project files.
+2. Implement the feature and update documentation. Use `write-or-update-tests`
+   to add or update tests.
+3. Build the project and run applicable tests.
+4. Check for errors, fix issues caused by the change, and repeat validation
+   until it passes or an unresolved blocker is identified.
+5. Report the outcome and any validation gaps; commit only if explicitly
+   requested.
+
 ## Validation
 
 - Build with `pio run -e esp32dev`.
