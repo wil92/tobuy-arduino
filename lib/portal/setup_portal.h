@@ -2,8 +2,8 @@
 
 #include <WebServer.h>
 
-#include "FlashManager.h"
-#include "NetworkManager.h"
+#include "flash_manager.h"
+#include "network_manager.h"
 
 class SetupPortal {
 public:

@@ -1,8 +1,8 @@
 #include <Arduino.h>
-#include "DisplayManager.h"
-#include "FlashManager.h"
-#include "NetworkManager.h"
-#include "ResetButton.h"
+#include "display_manager.h"
+#include "flash_manager.h"
+#include "network_manager.h"
+#include "reset_button.h"
 #include "setup_portal.h"
 
 #if __has_include("setup_ap_config.h")

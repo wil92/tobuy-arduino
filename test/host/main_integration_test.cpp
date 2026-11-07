@@ -1,8 +1,8 @@
 #include <cassert>
 #include <cstring>
 
-#include "FlashManager.h"
-#include "NetworkManager.h"
+#include "flash_manager.h"
+#include "network_manager.h"
 #include <WebServer.h>
 
 HardwareSerial Serial;

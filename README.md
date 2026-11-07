@@ -96,13 +96,13 @@ g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/stubs -Ilib/network test/host/w
 /tmp/tobuy-wifi-connection-test
 g++ -std=c++11 -Wall -Wextra -Werror -Ilib/flash test/host/wifi_settings_test.cpp -o /tmp/tobuy-wifi-settings-test
 /tmp/tobuy-wifi-settings-test
-g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/flash test/host/flash_manager_test.cpp lib/flash/FlashManager.cpp -o /tmp/tobuy-flash-test
+g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/flash test/host/flash_manager_test.cpp lib/flash/flash_manager.cpp -o /tmp/tobuy-flash-test
 /tmp/tobuy-flash-test
 g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/components test/host/reset_button_test.cpp -o /tmp/tobuy-reset-test
 /tmp/tobuy-reset-test
-g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/portal -Ilib/network -Ilib/flash test/host/setup_portal_test.cpp lib/portal/setup_portal.cpp lib/network/NetworkManager.cpp lib/flash/FlashManager.cpp -o /tmp/tobuy-setup-portal-test
+g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/portal -Ilib/network -Ilib/flash test/host/setup_portal_test.cpp lib/portal/setup_portal.cpp lib/network/network_manager.cpp lib/flash/flash_manager.cpp -o /tmp/tobuy-setup-portal-test
 /tmp/tobuy-setup-portal-test
-g++ -std=c++11 -Wall -Wextra -Werror '-DSETUP_AP_PASSWORD="test-password"' -Itest/host/portal_stubs -Ilib/portal -Ilib/network -Ilib/flash -Ilib/display -Ilib/components test/host/main_integration_test.cpp src/main.cpp lib/portal/setup_portal.cpp lib/network/NetworkManager.cpp lib/flash/FlashManager.cpp lib/display/DisplayManager.cpp -o /tmp/tobuy-main-test
+g++ -std=c++11 -Wall -Wextra -Werror '-DSETUP_AP_PASSWORD="test-password"' -Itest/host/portal_stubs -Ilib/portal -Ilib/network -Ilib/flash -Ilib/display -Ilib/components test/host/main_integration_test.cpp src/main.cpp lib/portal/setup_portal.cpp lib/network/network_manager.cpp lib/flash/flash_manager.cpp lib/display/display_manager.cpp -o /tmp/tobuy-main-test
 /tmp/tobuy-main-test missing && /tmp/tobuy-main-test saved && /tmp/tobuy-main-test invalid
 python3 -m unittest discover -s test/host -p 'test_*.py'
 # Exercise the frontend behavior (requires Node.js)

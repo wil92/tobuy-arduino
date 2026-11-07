@@ -1,7 +1,7 @@
 #include <cassert>
 #include <climits>
 
-#include "ResetButton.h"
+#include "reset_button.h"
 
 unsigned long fakeMillis = 0;
 int fakePinValue = HIGH;

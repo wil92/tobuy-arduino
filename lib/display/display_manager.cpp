@@ -1,4 +1,4 @@
-#include "DisplayManager.h"
+#include "display_manager.h"
 
 #include <Arduino.h>
 #include "sample_image.h"

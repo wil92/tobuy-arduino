@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cstring>
 
-#include "FlashManager.h"
+#include "flash_manager.h"
 
 Preferences *Preferences::instance = nullptr;
 
