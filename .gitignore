@@ -1,2 +1,6 @@
 .pio
 .idea
+include/wifi_credentials.h
+include/setup_ap_config.h
+__pycache__/
+*.pyc

@@ -34,6 +34,8 @@ project and its hardware constraints.
   resolution.
 - [`write-or-update-tests`](../skills/write-or-update-tests/SKILL.md): Use
   when adding or updating tests, including during feature development.
+- [`frontend-changes`](../skills/frontend-changes/SKILL.md): Use when editing
+  the embedded configuration frontend or its generated header.
 
 ## Feature development steps
 

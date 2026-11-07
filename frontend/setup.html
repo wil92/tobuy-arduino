@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>To Buy Wi-Fi setup</title>
+    <style>
+        :root { color-scheme: light; font-family: system-ui, sans-serif; color: #1e293b; background: #f8fafc; }
+        body { margin: 0; padding: 1.5rem; }
+        main { box-sizing: border-box; max-width: 26rem; margin: 2rem auto; padding: 1.5rem; background: white; border-radius: .6rem; box-shadow: 0 4px 16px #0002; }
+        h1 { margin-top: 0; font-size: 1.5rem; }
+        label { display: block; margin-top: 1rem; font-weight: 600; }
+        input { box-sizing: border-box; width: 100%; padding: .6rem; margin-top: .3rem; border: 1px solid #94a3b8; border-radius: .25rem; font: inherit; }
+        button { padding: .6rem .8rem; border: 0; border-radius: .25rem; background: #059669; color: white; font: inherit; cursor: pointer; }
+        button:disabled { opacity: .6; cursor: wait; }
+        .network { display: flex; gap: .5rem; align-items: end; }
+        .network input { flex: 1; min-width: 0; }
+        .submit { margin-top: 1.5rem; }
+        #status { min-height: 1.5em; color: #475569; }
+        #status.error { color: #b91c1c; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Wi-Fi configuration</h1>
+    <form id="config">
+        <label for="ssid">SSID</label>
+        <div class="network">
+            <input id="ssid" name="ssid" list="networks" autocomplete="off" required>
+            <button type="button" id="refresh">Refresh</button>
+        </div>
+        <datalist id="networks"></datalist>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password">
+        <small>Leave empty for an open network.</small>
+        <div><button class="submit" id="save" type="submit">Configure device</button></div>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script>
+    const form = document.getElementById("config");
+    const ssid = document.getElementById("ssid");
+    const password = document.getElementById("password");
+    const networks = document.getElementById("networks");
+    const status = document.getElementById("status");
+    const refresh = document.getElementById("refresh");
+    const save = document.getElementById("save");
+    const bytes = value => new TextEncoder().encode(value).length;
+
+    function showStatus(message, error = false) {
+        status.textContent = message;
+        status.classList.toggle("error", error);
+    }
+
+    async function scanNetworks() {
+        refresh.disabled = true;
+        showStatus("Scanning for networks...");
+        try {
+            const start = await fetch("/scan", {method: "POST"});
+            if (!start.ok) throw new Error(await start.text());
+            for (let attempt = 0; attempt < 30; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const response = await fetch("/refresh-ssid", {cache: "no-store"});
+                if (response.status === 202) continue;
+                if (!response.ok) throw new Error(await response.text());
+                const list = await response.json();
+                networks.replaceChildren();
+                for (const name of list) {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    networks.appendChild(option);
+                }
+                showStatus(list.length ? "Select a network or enter its SSID." : "No networks found; you can enter an SSID.");
+                return;
+            }
+            throw new Error("Scan timed out; try refreshing.");
+        } catch (error) {
+            showStatus("Network scan failed: " + error.message, true);
+        } finally {
+            refresh.disabled = false;
+        }
+    }
+
+    refresh.addEventListener("click", scanNetworks);
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const ssidLength = bytes(ssid.value);
+        const passwordLength = bytes(password.value);
+        if (!ssidLength || ssidLength > 32 || passwordLength > 64 ||
+            (passwordLength > 0 && passwordLength < 8) ||
+            (passwordLength === 64 && !/^[0-9a-fA-F]{64}$/.test(password.value))) {
+            showStatus("SSID must be 1-32 bytes. Password must be empty, 8-63 bytes, or 64 hexadecimal characters.", true);
+            return;
+        }
+        save.disabled = true;
+        try {
+            const response = await fetch("/", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: new URLSearchParams({ssid: ssid.value, password: password.value})
+            });
+            const message = await response.text();
+            if (!response.ok) throw new Error(message);
+            showStatus(message);
+        } catch (error) {
+            showStatus("Could not save settings: " + error.message, true);
+            save.disabled = false;
+        }
+    });
+    scanNetworks();
+</script>
+</body>
+</html>
