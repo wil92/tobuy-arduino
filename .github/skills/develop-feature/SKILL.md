@@ -25,9 +25,11 @@ instructions throughout.
    address build errors caused by the change.
 6. **Run tests.** Run the relevant tests, including `pio test -e esp32dev`
    when tests, a suitable connected board, and authorization are available.
-   PlatformIO device tests may upload firmware: do not run them or upload
-   firmware without authorization. If no tests exist or hardware is not
-   available, report the gap rather than treating it as a pass.
+   PlatformIO device tests may upload firmware: ask for explicit approval
+   before each upload attempt. Use the
+   [`upload-firmware`](../upload-firmware/SKILL.md) skill for firmware uploads.
+   If no tests exist or hardware is not available, report the gap rather than
+   treating it as a pass.
 7. **Check and repeat.** Review the changes and command output for errors and
    unintended effects. Fix issues caused by the change and repeat the affected
    build and tests until they pass or a blocker cannot be resolved. Report

@@ -19,5 +19,6 @@ feature development.
    unnecessarily.
 4. Run the relevant tests when possible and fix failures caused by the change.
    PlatformIO device tests may upload firmware: run them only with a suitable
-   connected board and authorization. Report tests that could not be run and
-   any unresolved failures; do not claim unrun tests pass.
+   connected board, and ask for explicit approval before each upload attempt.
+   Report tests that could not be run and any unresolved failures; do not
+   claim unrun tests pass.

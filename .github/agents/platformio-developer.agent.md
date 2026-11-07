@@ -36,6 +36,10 @@ project and its hardware constraints.
   when adding or updating tests, including during feature development.
 - [`frontend-changes`](../skills/frontend-changes/SKILL.md): Use when editing
   the embedded configuration frontend or its generated header.
+- [`upload-firmware`](../skills/upload-firmware/SKILL.md): Use when uploading
+  firmware; ask for explicit approval before each upload attempt.
+- [`device-logs`](../skills/device-logs/SKILL.md): Use when inspecting logs
+  directly from the device.
 
 ## Feature development steps
 
@@ -56,5 +60,7 @@ skill:
 - Build with `pio run -e esp32dev`.
 - Run relevant tests with `pio test -e esp32dev` when tests and a suitable
   connected board are available.
-- Do not upload firmware or run hardware-dependent tests without a suitable
-  device and authorization. Report any validation that could not be performed.
+- Ask for explicit approval before each firmware upload attempt, including
+  device tests that upload firmware. Do not run hardware-dependent tests
+  without a suitable device and authorization. Report any validation that
+  could not be performed.
