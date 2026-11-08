@@ -9,7 +9,13 @@ namespace {
 constexpr uint32_t calibration_magic = 0x544f4259;
 constexpr int heading_height = 54;
 constexpr int footer_height = 40;
-constexpr int row_height = 32;
+constexpr int row_height = 50;
+constexpr int switch_x = 8;
+constexpr int switch_y_offset = 4;
+constexpr int switch_width = 70;
+constexpr int switch_height = 40;
+constexpr int item_text_x = switch_x + switch_width + 10;
+constexpr int item_text_size = 2;
 }
 
 ShoppingView::ShoppingView(TFT_eSPI &display, ShoppingClient &client)
@@ -82,6 +88,7 @@ void ShoppingView::render() {
     if (firstRow_ > maximum) firstRow_ = maximum;
     display_.fillScreen(TFT_BLACK);
     display_.setTextDatum(TL_DATUM);
+    display_.setTextSize(1);
     display_.setTextColor(TFT_WHITE, TFT_BLACK);
     display_.drawString("To buy", 8, 4, 2);
     display_.setTextColor(client_.ready() ? TFT_GREEN : TFT_RED, TFT_BLACK);
@@ -93,15 +100,19 @@ void ShoppingView::render() {
         const int y = heading_height + static_cast<int>(row) * row_height;
         char name[shopping::max_name_length + 1];
         std::strcpy(name, item.name);
-        while (name[0] && display_.textWidth(name, 2) > display_.width() - 80) {
+        display_.setTextSize(item_text_size);
+        while (name[0] && display_.textWidth(name, 2) > display_.width() - item_text_x - 8) {
             name[std::strlen(name) - 1] = '\0';
         }
-        display_.drawString(name, 8, y + 6, 2);
+        display_.drawString(name, item_text_x, y + (row_height - display_.fontHeight(2)) / 2, 2);
+        display_.setTextSize(1);
         if (item.periodic) {
             const uint16_t color = item.needed ? TFT_GREEN : TFT_DARKGREY;
-            display_.fillRoundRect(display_.width() - 64, y + 3, 56, 25, 8, color);
+            display_.fillRoundRect(switch_x, y + switch_y_offset, switch_width, switch_height, 8, color);
             display_.setTextColor(TFT_WHITE, color);
-            display_.drawString(item.needed ? "ON" : "OFF", display_.width() - 56, y + 7, 2);
+            const char *label = item.needed ? "ON" : "OFF";
+            display_.drawString(label, switch_x + (switch_width - display_.textWidth(label, 2)) / 2,
+                                y + switch_y_offset + (switch_height - display_.fontHeight(2)) / 2, 2);
             display_.setTextColor(TFT_WHITE, TFT_BLACK);
         }
         display_.drawFastHLine(0, y + row_height - 1, display_.width(), TFT_DARKGREY);
@@ -194,9 +205,12 @@ void ShoppingView::onRelease(int x, int y) {
         else if (x >= display_.width() / 2 && firstRow_ < maximum) ++firstRow_;
         render();
     } else if (startY_ >= heading_height && startY_ < display_.height() - footer_height &&
-               std::abs(y - startY_) < 15 && startX_ >= display_.width() - 70 && x >= display_.width() - 70) {
+               std::abs(y - startY_) < 15 && startX_ >= switch_x && startX_ < switch_x + switch_width &&
+               x >= switch_x && x < switch_x + switch_width) {
         const size_t row = static_cast<size_t>((startY_ - heading_height) / row_height);
-        if (row < rows && static_cast<size_t>((y - heading_height) / row_height) == row) {
+        const int switchTop = heading_height + static_cast<int>(row) * row_height + switch_y_offset;
+        if (row < rows && startY_ >= switchTop && startY_ < switchTop + switch_height &&
+            y >= switchTop && y < switchTop + switch_height) {
             client_.toggle(firstRow_ + row);
         }
     }

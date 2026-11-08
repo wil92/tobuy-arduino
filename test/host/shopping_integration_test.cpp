@@ -73,10 +73,34 @@ int main() {
     touch(view, 20, 50);
     touch(view, 220, 50);
     touch(view, 20, 270);
-    assert(!Preferences::saved.empty() && hasText(display, "Milk") && hasText(display, "Item6"));
-    assert(!hasText(display, "Item7"));
+    assert(!Preferences::saved.empty() && hasText(display, "Milk") && hasText(display, "Item3"));
+    assert(!hasText(display, "Item4"));
+    auto milk = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                             [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Milk"; });
+    auto missing = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Item1"; });
+    assert(milk != display.textDraws.end() && milk->size == 2 && milk->font == 2 && milk->x == 88);
+    assert(missing != display.textDraws.end() && missing->size == 2 && missing->x == milk->x);
+    assert(display.rectangles.size() == 1);
+    assert(display.rectangles[0].x == 8 && display.rectangles[0].y == 58 &&
+           display.rectangles[0].width == 70 && display.rectangles[0].height == 40);
+    assert(milk->x >= display.rectangles[0].x + display.rectangles[0].width);
+    auto down = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                             [](const TFT_eSPI::TextDraw &draw) { return draw.value == "DOWN"; });
+    assert(down != display.textDraws.end() && down->size == 1);
 
     touch(view, 200, 65);
+    assert(socket.sent.empty());
+    touch(view, 7, 65);
+    assert(socket.sent.empty());
+    touch(view, 78, 65);
+    assert(socket.sent.empty());
+    touch(view, 30, 55);
+    assert(socket.sent.empty());
+    touch(view, 30, 98);
+    assert(socket.sent.empty());
+
+    touch(view, 30, 65);
     assert(socket.sent.find("\"id\":\"milk\"") != std::string::npos);
     assert(socket.sent.find("\"needed\":true") != std::string::npos);
     assert(!client.list().items[0].needed);
@@ -87,15 +111,24 @@ int main() {
     socket.event(WStype_TEXT, list(9, false));
     assert(client.list().revision == 11 && client.list().items[0].needed);
     socket.event(WStype_TEXT, list(12, true, 3));
-    assert(hasText(display, "Item2") && !hasText(display, "Item6"));
+    assert(hasText(display, "Item2") && !hasText(display, "Item3"));
     socket.event(WStype_TEXT, list(13, true));
-    assert(hasText(display, "Item6"));
+    assert(hasText(display, "Item3"));
+    socket.event(WStype_TEXT,
+                 R"({"type":"list","revision":14,"periodic":[{"id":"milk","name":"Very long item name","needed":true}],"missing":[]})");
+    const auto truncated = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                        [](const TFT_eSPI::TextDraw &draw) {
+                                            return draw.value.find("Very") == 0;
+                                        });
+    assert(truncated != display.textDraws.end() && truncated->value != "Very long item name");
+    assert(truncated->x + static_cast<int>(truncated->value.size()) * 8 * truncated->size <= display.width() - 8);
+    socket.event(WStype_TEXT, list(15, true));
     touch(view, 200, 300);
-    assert(!hasText(display, "Milk") && hasText(display, "Item7"));
+    assert(!hasText(display, "Milk") && hasText(display, "Item4"));
     touch(view, 20, 300);
     assert(hasText(display, "Milk"));
     const std::string lastCommand = socket.sent;
-    touch(view, 200, 100);
+    touch(view, 30, 115);
     assert(socket.sent == lastCommand);
     XPT2046_Touchscreen::point = {1200, 2400, 100};
     XPT2046_Touchscreen::down = true;
@@ -104,13 +137,13 @@ int main() {
     view.update();
     XPT2046_Touchscreen::down = false;
     view.update();
-    assert(hasText(display, "Item9") && !hasText(display, "Milk"));
+    assert(hasText(display, "Item5") && !hasText(display, "Milk"));
 
     socket.event(WStype_TEXT, "{invalid");
     assert(!client.ready());
-    FakeHttp::body = list(14, true);
+    FakeHttp::body = list(16, true);
     client.update();
-    assert(client.ready() && client.list().revision == 14);
+    assert(client.ready() && client.list().revision == 16);
     socket.event(WStype_DISCONNECTED);
     assert(!client.ready() && std::strcmp(client.status(), "Server unavailable") == 0);
     socket.event(WStype_CONNECTED);
