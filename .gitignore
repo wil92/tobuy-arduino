@@ -5,3 +5,4 @@ include/setup_ap_config.h
 include/display_setup.h
 __pycache__/
 *.pyc
+*.FCBak
