@@ -11,6 +11,7 @@ constexpr size_t max_place_length = 96;
 
 struct Reading {
     float celsius = 0;
+    uint16_t minuteOfDay = 0;
     char city[max_place_length + 1] = {};
     char country[max_place_length + 1] = {};
 };
@@ -25,6 +26,7 @@ public:
     bool update(bool visible);
     bool hasReading() const { return hasReading_; }
     const temperature::Reading &reading() const { return reading_; }
+    void formatTime(char (&out)[6]) const;
     const char *status() const { return status_; }
 
 private:
@@ -46,4 +48,5 @@ private:
     bool attempted_ = false;
     unsigned long lastAttempt_ = 0;
     unsigned long interval_ = 0;
+    uint32_t clockTick_ = 0;
 };

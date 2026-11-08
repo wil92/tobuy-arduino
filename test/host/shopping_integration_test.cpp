@@ -106,7 +106,7 @@ int main() {
     assert(hasText(display, "Milk"));
     swipe(view, 30, 40, 120, 45);
     assert(hasText(display, "Loading temperature") && socket.sent.empty());
-    FakeHttp::body = R"({"city":"MÁLAGA","country":"ESPAÑA","temperature":12.3,"unit":"°C"})";
+    FakeHttp::body = R"({"city":"MÁLAGA","country":"ESPAÑA","time":"2026-11-08T12:34","temperature":12.3,"unit":"°C"})";
     runFakeTask(0);
     view.update();
     assert(FakeHttp::url == "http://server:3000/temperature");
@@ -117,26 +117,37 @@ int main() {
                                       [](const TFT_eSPI::TextDraw &draw) { return draw.value == "ESPANA"; });
     const auto reading = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                       [](const TFT_eSPI::TextDraw &draw) { return draw.value == "12.3"; });
+    const auto clock = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                    [](const TFT_eSPI::TextDraw &draw) { return draw.value == "12:34"; });
     assert(city != display.textDraws.end() && country != display.textDraws.end() &&
-           reading != display.textDraws.end() && city->size == 2 && country->size == 2 &&
-           city->y + 32 <= country->y && country->y + 32 <= display.height() - 22 &&
-           reading->y + 52 * reading->size <= city->y);
+           reading != display.textDraws.end() && clock != display.textDraws.end() &&
+           city->size == 1 && country->size == 1 && clock->size == 4 &&
+           clock->x >= 0 && clock->x + 5 * 8 * clock->size <= display.width() &&
+           city->y + 16 <= country->y && country->y + 16 <= display.height() - 22 &&
+           reading->y + 52 * reading->size <= clock->y && clock->y + 16 * clock->size <= city->y);
+    fakeMillis += 59999;
+    view.update();
+    assert(hasText(display, "12:34"));
+    ++fakeMillis;
+    view.update();
+    assert(hasText(display, "12:35") && !hasText(display, "12:34"));
     const uint16_t coolColor = display.screenColor;
     socket.event(WStype_TEXT, list(11, true));
     assert(hasText(display, "12.3") && !hasText(display, "Milk"));
-    fakeMillis += 600000;
+    fakeMillis += 540000;
     view.update();
     FakeHttp::code = 503;
     runFakeTask(0);
     view.update();
-    assert(hasText(display, "12.3") && hasText(display, "City not configured"));
+    assert(hasText(display, "12.3") && hasText(display, "12:44") && hasText(display, "City not configured"));
     fakeMillis += 30000;
     view.update();
     FakeHttp::code = 200;
-    FakeHttp::body = R"({"city":"Oslo","country":null,"temperature":-999,"unit":"°C"})";
+    FakeHttp::body = R"({"city":"Oslo","country":null,"time":"2026-11-08T22:17","temperature":-999,"unit":"°C"})";
     runFakeTask(0);
     view.update();
-    assert(hasText(display, "-999.0") && hasText(display, "Oslo") && display.screenColor != coolColor);
+    assert(hasText(display, "-999.0") && hasText(display, "Oslo") && hasText(display, "22:17") &&
+           display.screenColor != coolColor);
     const auto number = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                      [](const TFT_eSPI::TextDraw &draw) { return draw.value == "-999.0"; });
     const auto unit = std::find_if(display.textDraws.begin(), display.textDraws.end(),
@@ -150,8 +161,11 @@ int main() {
     assert(hasText(display, "-999.0"));
     swipe(view, 180, 160, 80, 160);
     assert(hasText(display, "Milk"));
+    fakeMillis += 60000;
+    view.update();
+    assert(hasText(display, "Milk") && !hasText(display, "22:18"));
     swipe(view, 190, 160, 80, 160);
-    assert(hasText(display, "-999.0"));
+    assert(hasText(display, "-999.0") && hasText(display, "22:18"));
     swipe(view, 80, 160, 190, 160);
     assert(hasText(display, "Milk"));
     FakeHttp::body = list(10, false);

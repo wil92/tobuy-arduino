@@ -86,11 +86,17 @@ task with a 1.5-second connection timeout and 15-second read timeout.
 
 The temperature screen requests `GET /temperature` from the same HTTP server.
 The response must be a JSON object with a numeric `temperature`, a `unit` of
-`°C`, a nonempty `city`, and an optional or null `country`, as specified by
+`°C`, a nonempty `city`, an optional or null `country`, and a local `time`
+in `YYYY-MM-DDTHH:MM` format, as specified by
 the [server documentation](https://github.com/wil92/tobuy-server/blob/master/doc/temperature.md).
 Place names are limited to 96 UTF-8 bytes and the complete response to 1024
 bytes. The device rejects malformed, oversized, or non-Celsius responses.
 Long names are clipped on screen, and unsupported font characters may not render.
+The screen shows the city's local time below the temperature and advances it
+every minute using the device's elapsed time, including while offline. The
+server supplies no seconds or timezone offset, so the clock can be up to about
+a minute behind and daylight-saving transitions are corrected on the next
+successful weather refresh.
 
 While the temperature screen is open, a reading is requested immediately if
 needed and refreshed every 10 minutes. Failed requests retry after 30 seconds;

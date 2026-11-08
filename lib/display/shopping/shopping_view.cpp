@@ -11,7 +11,7 @@ namespace {
 constexpr uint32_t calibration_magic = 0x544f4259;
 constexpr int heading_height = 30;
 constexpr int footer_height = 24;
-constexpr int temperature_location_area = 98;
+constexpr int temperature_location_area = 144;
 constexpr int row_height = 50;
 constexpr int switch_x = 8;
 constexpr int switch_y_offset = 4;
@@ -303,12 +303,17 @@ void ShoppingView::drawTemperature() {
         display_.drawCircle(left + numberWidth + 4 * size, y + 5 * size, 3 * size, TFT_WHITE);
         display_.drawString("C", left + numberWidth + degreeWidth, y, 1);
         display_.setTextFont(2);
-        display_.setTextSize(2);
+        display_.setTextSize(4);
         const int locationTop = display_.height() - temperature_location_area;
+        char time[6];
+        temperature_.formatTime(time);
+        display_.drawString(time, (display_.width() - display_.textWidth(time, 2)) / 2, locationTop, 2);
+        const int cityTop = locationTop + display_.fontHeight(2) + 8;
+        display_.setTextSize(1);
         const int locationLineHeight = display_.fontHeight(2);
-        display_.setViewport(6, locationTop, display_.width() - 12, locationLineHeight * 2, false);
-        drawSupportedText(display_, temperature_.reading().city, 6, locationTop, 2, 2);
-        drawSupportedText(display_, temperature_.reading().country, 6, locationTop + locationLineHeight, 2, 2);
+        display_.setViewport(6, cityTop, display_.width() - 12, locationLineHeight * 2, false);
+        drawSupportedText(display_, temperature_.reading().city, 6, cityTop, 2, 1);
+        drawSupportedText(display_, temperature_.reading().country, 6, cityTop + locationLineHeight, 2, 1);
         display_.resetViewport();
     }
     display_.setTextSize(1);

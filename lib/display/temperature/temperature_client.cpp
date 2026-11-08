@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -43,6 +44,29 @@ bool copyPlace(JsonVariantConst value, char *out, bool required) {
     std::memcpy(out, text.c_str(), text.size() + 1);
     return true;
 }
+
+bool parseTime(JsonVariantConst value, uint16_t &minuteOfDay) {
+    if (!value.is<const char *>()) return false;
+    JsonString text = value.as<JsonString>();
+    const char *s = text.c_str();
+    if (text.size() != 16 || std::strlen(s) != 16 ||
+        s[4] != '-' || s[7] != '-' || s[10] != 'T' || s[13] != ':') return false;
+    for (size_t i = 0; i < 16; ++i) {
+        if (i == 4 || i == 7 || i == 10 || i == 13) continue;
+        if (s[i] < '0' || s[i] > '9') return false;
+    }
+    const unsigned year = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + s[3] - '0';
+    const unsigned month = (s[5] - '0') * 10 + s[6] - '0';
+    const unsigned day = (s[8] - '0') * 10 + s[9] - '0';
+    const unsigned hour = (s[11] - '0') * 10 + s[12] - '0';
+    const unsigned minute = (s[14] - '0') * 10 + s[15] - '0';
+    static const uint8_t days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (!year || month < 1 || month > 12 || hour > 23 || minute > 59) return false;
+    const bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    if (!day || day > days[month - 1] + (month == 2 && leap ? 1U : 0U)) return false;
+    minuteOfDay = static_cast<uint16_t>(hour * 60 + minute);
+    return true;
+}
 }
 
 bool temperature::parse(const char *data, size_t length, Reading &reading) {
@@ -54,6 +78,7 @@ bool temperature::parse(const char *data, size_t length, Reading &reading) {
     Reading candidate;
     candidate.celsius = root["temperature"].as<float>();
     if (!std::isfinite(candidate.celsius) || candidate.celsius < -999.0f || candidate.celsius > 999.0f ||
+        !parseTime(root["time"], candidate.minuteOfDay) ||
         !copyPlace(root["city"], candidate.city, true) ||
         !copyPlace(root["country"], candidate.country, false)) return false;
     reading = candidate;
@@ -96,8 +121,22 @@ void TemperatureClient::begin(const char *serverUrl) {
     ready_ = true;
 }
 
+void TemperatureClient::formatTime(char (&out)[6]) const {
+    const unsigned minute = reading_.minuteOfDay % 1440U;
+    std::snprintf(out, sizeof(out), "%02u:%02u", minute / 60, minute % 60);
+}
+
 bool TemperatureClient::update(bool visible) {
     bool changed = false;
+    const uint32_t now = static_cast<uint32_t>(millis());
+    if (hasReading_) {
+        const uint32_t elapsedMinutes = (now - clockTick_) / 60000U;
+        if (elapsedMinutes) {
+            reading_.minuteOfDay = static_cast<uint16_t>((reading_.minuteOfDay + elapsedMinutes) % 1440U);
+            clockTick_ += elapsedMinutes * 60000U;
+            changed = visible;
+        }
+    }
     Result result;
     if (ready_ && xQueueReceive(results_, &result, 0) == pdTRUE) {
         pending_ = false;
@@ -107,6 +146,7 @@ bool TemperatureClient::update(bool visible) {
         } else {
             reading_ = result.reading;
             hasReading_ = true;
+            clockTick_ = now;
             status_ = "";
             interval_ = refresh_ms;
         }
