@@ -1,3 +1,3 @@
 #pragma once
-struct GFXfont {};
-static const GFXfont FreeSans9pt7b = {};
+struct GFXfont { int size; };
+static const GFXfont FreeSans9pt7b = {9};

@@ -26,6 +26,15 @@ or a pending update. The last list may remain visible but switches are disabled
 while disconnected. The footer shows the visible item range and total; a small
 circle marks a read-only missing item.
 
+Swipe horizontally in either direction to switch between the shopping list
+and the current temperature in Celsius, with the server's city and country.
+The background is blue below 0 °C, cyan from 0 to below
+15 °C, green from 15 to below 25 °C, orange from 25 to below 30 °C, and red
+at 30 °C and above. Temperatures are shown to one decimal place; colors use
+the unrounded reading. The last reading remains visible with an error message
+if an update fails. Configure `WEATHER_CITY` on the server as described in
+its [temperature documentation](https://github.com/wil92/tobuy-server/blob/master/doc/temperature.md).
+
 On the first normal-mode startup, tap each cross to calibrate the resistive
 touchscreen. Calibration is saved separately from Wi-Fi settings. To recalibrate,
 hold the "To buy" heading for three seconds and tap the three crosses again.

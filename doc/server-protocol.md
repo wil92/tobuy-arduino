@@ -60,3 +60,22 @@ an error and refetches; rejected changes therefore remain unchanged. Other
 server message types are not supported. Connection failures are shown on the
 display and retried; HTTP requests have bounded network timeouts but can
 briefly pause touch handling.
+
+## Temperature
+
+The temperature screen requests `GET /temperature` from the same HTTP server.
+The response must be a JSON object with a numeric `temperature`, a `unit` of
+`°C`, a nonempty `city`, and an optional or null `country`, as specified by
+the [server documentation](https://github.com/wil92/tobuy-server/blob/master/doc/temperature.md).
+Place names are limited to 96 UTF-8 bytes and the complete response to 1024
+bytes. The device rejects malformed, oversized, or non-Celsius responses.
+Long names are clipped on screen, and unsupported font characters may not render.
+
+While the temperature screen is open, a reading is requested immediately if
+needed and refreshed every 10 minutes. Failed requests retry after 30 seconds;
+Wi-Fi reconnection triggers a retry immediately. The last valid reading remains
+visible with an error, or a loading message during retries, until a new reading
+succeeds. The weather request runs
+in a separate task so the server's upstream lookups do not block touch or
+shopping updates. The server requires `WEATHER_CITY` to be configured and
+can return 404, 502, or 503 for weather errors.

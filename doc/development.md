@@ -6,7 +6,8 @@ libraries declared in `platformio.ini`.
 
 Firmware components live under `lib/`: `network` manages Wi-Fi and scanning,
 `flash` stores settings, `portal` serves configuration requests, `display`
-renders the setup screen and contains `display/shopping` for the list and touchscreen, and
+renders the setup screen and contains `display/shopping` for the list and touchscreen
+and `display/temperature` for the temperature client, and
 `components` contains the reset button. `src/main.cpp` coordinates their startup
 and update loops. See the [coding rules](coding-rules.md) for project conventions.
 
@@ -45,8 +46,10 @@ g++ -std=c++11 -Wall -Wextra -Werror '-DSETUP_AP_PASSWORD="test-password"' -Ites
 /tmp/tobuy-main-test missing && /tmp/tobuy-main-test saved && /tmp/tobuy-main-test invalid && /tmp/tobuy-main-test configured
 g++ -std=c++11 -Wall -Wextra -Werror -I.pio/libdeps/esp32dev/ArduinoJson/src -Ilib/display/shopping test/host/shopping_list_test.cpp lib/display/shopping/shopping_list.cpp -o /tmp/tobuy-shopping-list-test
 /tmp/tobuy-shopping-list-test
-g++ -std=c++11 -Wall -Wextra -Werror -DTOBUY_TOUCH_SCK=25 -DTOBUY_TOUCH_MISO=39 -DTOBUY_TOUCH_MOSI=32 -DTOBUY_TOUCH_CS=33 -Itest/host/shopping_stubs -I.pio/libdeps/esp32dev/ArduinoJson/src -Ilib/display/shopping test/host/shopping_integration_test.cpp lib/display/shopping/shopping_client.cpp lib/display/shopping/shopping_list.cpp lib/display/shopping/shopping_view.cpp -o /tmp/tobuy-shopping-test
+g++ -std=c++11 -Wall -Wextra -Werror -DTOBUY_TOUCH_SCK=25 -DTOBUY_TOUCH_MISO=39 -DTOBUY_TOUCH_MOSI=32 -DTOBUY_TOUCH_CS=33 -Itest/host/shopping_stubs -I.pio/libdeps/esp32dev/ArduinoJson/src -Ilib/display/shopping test/host/shopping_integration_test.cpp lib/display/shopping/shopping_client.cpp lib/display/shopping/shopping_list.cpp lib/display/shopping/shopping_view.cpp lib/display/temperature/temperature_client.cpp -o /tmp/tobuy-shopping-test
 /tmp/tobuy-shopping-test
+g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/shopping_stubs -I.pio/libdeps/esp32dev/ArduinoJson/src -Ilib/display/temperature test/host/temperature_test.cpp lib/display/temperature/temperature_client.cpp -o /tmp/tobuy-temperature-test
+/tmp/tobuy-temperature-test
 python3 -m unittest discover -s test/host -p 'test_*.py'
 # Exercise the frontend behavior (requires Node.js)
 node test/host/frontend_test.js
@@ -55,7 +58,7 @@ node test/host/frontend_test.js
 pio run -e esp32dev -t upload
 ```
 
-The host tests check the setup, list protocol, simulated server synchronization,
+The host tests check the setup, list and temperature protocols, simulated server synchronization,
 touch navigation, and generated page. They cannot verify the physical
 display, touchscreen, button wiring, or Wi-Fi connectivity. If PlatformIO cannot
 detect the board's serial port automatically, specify it with `--upload-port`,

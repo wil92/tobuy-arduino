@@ -30,6 +30,7 @@ constexpr uint16_t switch_on_color = 0x03c5;
 constexpr uint16_t switch_off_color = 0x4209;
 constexpr uint16_t button_color = 0x2946;
 constexpr unsigned long animation_interval_ms = 350;
+constexpr int page_swipe_distance = 50;
 
 struct StatusPresentation {
     const char *label;
@@ -85,7 +86,8 @@ bool nextLine(TFT_eSPI &display, const char *name, size_t &offset, int available
 ShoppingView::ShoppingView(TFT_eSPI &display, ShoppingClient &client)
     : display_(display), client_(client) {}
 
-void ShoppingView::begin() {
+void ShoppingView::begin(const char *serverUrl) {
+    temperature_.begin(serverUrl);
     touchSpi_.begin(TOBUY_TOUCH_SCK, TOBUY_TOUCH_MISO, TOBUY_TOUCH_MOSI, TOBUY_TOUCH_CS);
     if (!touch_.begin(touchSpi_)) {
         Serial.println("Touchscreen initialization failed");
@@ -101,6 +103,46 @@ void ShoppingView::begin() {
         calibrated_ = validCalibration();
     }
     render();
+}
+
+void ShoppingView::drawTemperature() {
+    const uint16_t color = temperature_.hasReading()
+                               ? temperature::background(temperature_.reading().celsius)
+                               : background_color;
+    display_.fillScreen(color);
+    display_.setTextDatum(TL_DATUM);
+    if (temperature_.hasReading()) {
+        char number[16];
+        std::snprintf(number, sizeof(number), "%.1f", temperature_.reading().celsius);
+        display_.setFreeFont(&FreeSansBold24pt7b);
+        int size = 3;
+        int numberWidth, unitWidth, degreeWidth;
+        for (;;) {
+            display_.setTextSize(size);
+            numberWidth = display_.textWidth(number, 1);
+            unitWidth = display_.textWidth("C", 1);
+            degreeWidth = 9 * size;
+            if (size == 1 || (numberWidth + degreeWidth + unitWidth <= display_.width() - 12 &&
+                              display_.fontHeight(1) <= display_.height() - heading_height - 75)) break;
+            --size;
+        }
+        const int left = (display_.width() - numberWidth - degreeWidth - unitWidth) / 2;
+        const int y = heading_height + (display_.height() - heading_height - 75 - display_.fontHeight(1)) / 2;
+        display_.setTextColor(TFT_WHITE, color);
+        display_.drawString(number, left, y, 1);
+        display_.drawCircle(left + numberWidth + 4 * size, y + 5 * size, 3 * size, TFT_WHITE);
+        display_.drawString("C", left + numberWidth + degreeWidth, y, 1);
+        display_.setTextSize(1);
+        display_.setTextFont(2);
+        display_.setViewport(6, display_.height() - 65, display_.width() - 12, 38, false);
+        display_.drawString(temperature_.reading().city, 6, display_.height() - 65, 2);
+        display_.drawString(temperature_.reading().country, 6, display_.height() - 46, 2);
+        display_.resetViewport();
+    }
+    display_.setTextSize(1);
+    display_.setTextFont(2);
+    display_.setTextColor(TFT_WHITE, color);
+    display_.drawString(temperature_.status(), 8, display_.height() - 22, 2);
 }
 
 bool ShoppingView::validCalibration() const {
@@ -196,6 +238,10 @@ void ShoppingView::render() {
         drawCalibration();
         return;
     }
+    if (temperatureVisible_) {
+        drawTemperature();
+        return;
+    }
     const shopping::List &list = client_.list();
     updateLayout();
     const int viewport = viewportHeight();
@@ -289,7 +335,8 @@ bool ShoppingView::mapTouch(const TS_Point &point, int &x, int &y) const {
 
 void ShoppingView::update() {
     if (!touchReady_) return;
-    if (calibrated_ && statusPresentation(client_.status()).animated &&
+    if (temperature_.update(calibrated_ && temperatureVisible_) && calibrated_ && temperatureVisible_) render();
+    if (calibrated_ && !temperatureVisible_ && statusPresentation(client_.status()).animated &&
         static_cast<unsigned long>(millis() - lastAnimationAt_) >= animation_interval_ms) {
         lastAnimationAt_ = millis();
         animationFrame_ = (animationFrame_ + 1) % 4;
@@ -328,7 +375,7 @@ void ShoppingView::update() {
                 }
                 lastX_ = x;
                 lastY_ = y;
-                if (startX_ < 73 && x < 73 && startY_ < 25 && y < 25 &&
+                if (!temperatureVisible_ && startX_ < 73 && x < 73 && startY_ < 25 && y < 25 &&
                     static_cast<unsigned long>(millis() - touchStartedAt_) >= 3000) {
                     calibrated_ = false;
                     calibrationStep_ = 0;
@@ -345,6 +392,16 @@ void ShoppingView::update() {
 }
 
 void ShoppingView::onRelease(int x, int y) {
+    const int horizontal = std::abs(x - startX_);
+    const int vertical = std::abs(y - startY_);
+    if (horizontal >= page_swipe_distance && horizontal > vertical) {
+        temperatureVisible_ = !temperatureVisible_;
+        temperature_.update(temperatureVisible_);
+        render();
+        return;
+    }
+    if (temperatureVisible_) return;
+    if (horizontal >= 15 && vertical <= 25) return;
     const size_t count = client_.list().count;
     const int viewport = viewportHeight();
     if (viewport == 0) return;
@@ -367,12 +424,13 @@ void ShoppingView::onRelease(int x, int y) {
     } else if (std::abs(delta) > 25) {
         scrollOffset_ = std::max(0, std::min(maximum, scrollOffset_ - delta));
         render();
-    } else if (startY_ >= display_.height() - footer_height && y >= display_.height() - footer_height) {
+    } else if (horizontal < 15 && startY_ >= display_.height() - footer_height && y >= display_.height() - footer_height) {
         if (x < display_.width() / 2) scrollOffset_ = std::max(0, scrollOffset_ - row_height);
         else scrollOffset_ = std::min(maximum, scrollOffset_ + row_height);
         render();
     } else if (startY_ >= heading_height && startY_ < display_.height() - footer_height &&
-               std::abs(y - startY_) < 15 && startX_ >= switch_x && startX_ < switch_x + switch_width &&
+               std::abs(y - startY_) < 15 && horizontal < 15 &&
+               startX_ >= switch_x && startX_ < switch_x + switch_width &&
                x >= switch_x && x < switch_x + switch_width) {
         for (size_t i = 0; i < count; ++i) {
             const int switchTop = heading_height + itemOffsets_[i] - scrollOffset_ + switch_y_offset;

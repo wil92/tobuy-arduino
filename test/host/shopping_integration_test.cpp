@@ -54,6 +54,16 @@ static void touch(ShoppingView &view, int x, int y) {
     view.update();
 }
 
+static void swipe(ShoppingView &view, int startX, int startY, int endX, int endY) {
+    XPT2046_Touchscreen::point = {static_cast<int16_t>(startX * 10), static_cast<int16_t>(startY * 10), 100};
+    XPT2046_Touchscreen::down = true;
+    view.update();
+    XPT2046_Touchscreen::point = {static_cast<int16_t>(endX * 10), static_cast<int16_t>(endY * 10), 100};
+    view.update();
+    XPT2046_Touchscreen::down = false;
+    view.update();
+}
+
 int main() {
     ShoppingClient client;
     client.begin("http://server:3000", redraw);
@@ -75,11 +85,63 @@ int main() {
     TFT_eSPI display;
     ShoppingView view(display, client);
     activeView = &view;
-    view.begin();
+    view.begin("http://server:3000");
     assert(hasText(display, "Touch the cross"));
     touch(view, 20, 50);
     touch(view, 220, 50);
     touch(view, 20, 270);
+
+    touch(view, 120, 40);
+    assert(hasText(display, "Milk") && !hasText(display, "Loading temperature"));
+    swipe(view, 30, 40, 79, 40);
+    assert(hasText(display, "Milk") && socket.sent.empty());
+    swipe(view, 230, 55, 190, 55);
+    assert(hasText(display, "1-5/10") && socket.sent.empty());
+    swipe(view, 120, 200, 180, 120);
+    assert(hasText(display, "TO BUY") && hasText(display, "Item5"));
+    touch(view, 230, 55);
+    assert(hasText(display, "Milk"));
+    swipe(view, 30, 40, 120, 45);
+    assert(hasText(display, "Loading temperature") && socket.sent.empty());
+    FakeHttp::body = R"({"city":"London","country":"United Kingdom","temperature":12.3,"unit":"°C"})";
+    runFakeTask(0);
+    view.update();
+    assert(FakeHttp::url == "http://server:3000/temperature");
+    assert(hasText(display, "12.3") && hasText(display, "C") && hasText(display, "London"));
+    const uint16_t coolColor = display.screenColor;
+    socket.event(WStype_TEXT, list(11, true));
+    assert(hasText(display, "12.3") && !hasText(display, "Milk"));
+    fakeMillis += 600000;
+    view.update();
+    FakeHttp::code = 503;
+    runFakeTask(0);
+    view.update();
+    assert(hasText(display, "12.3") && hasText(display, "City not configured"));
+    fakeMillis += 30000;
+    view.update();
+    FakeHttp::code = 200;
+    FakeHttp::body = R"({"city":"Oslo","country":null,"temperature":-999,"unit":"°C"})";
+    runFakeTask(0);
+    view.update();
+    assert(hasText(display, "-999.0") && hasText(display, "Oslo") && display.screenColor != coolColor);
+    const auto number = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                     [](const TFT_eSPI::TextDraw &draw) { return draw.value == "-999.0"; });
+    const auto unit = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                   [](const TFT_eSPI::TextDraw &draw) { return draw.value == "C"; });
+    assert(number != display.textDraws.end() && unit != display.textDraws.end() &&
+           number->size == 1 && unit->size == number->size && number->x >= 0 &&
+           unit->x + 26 * unit->size <= display.width());
+    touch(view, 120, 40);
+    assert(hasText(display, "-999.0"));
+    swipe(view, 100, 100, 140, 180);
+    assert(hasText(display, "-999.0"));
+    swipe(view, 180, 160, 80, 160);
+    assert(hasText(display, "Milk"));
+    swipe(view, 190, 160, 80, 160);
+    assert(hasText(display, "-999.0"));
+    swipe(view, 80, 160, 190, 160);
+    assert(hasText(display, "Milk"));
+    FakeHttp::body = list(10, false);
     WiFi.currentStatus = WL_DISCONNECTED;
     client.update();
     assert(hasText(display, "Wi-Fi unavailable"));
@@ -304,7 +366,7 @@ int main() {
 
     TFT_eSPI secondDisplay;
     ShoppingView secondView(secondDisplay, client);
-    secondView.begin();
+    secondView.begin("http://server:3000");
     assert(hasText(secondDisplay, "Milk") && !hasText(secondDisplay, "Touch the cross"));
     XPT2046_Touchscreen::point = {300, 100, 100};
     XPT2046_Touchscreen::down = true;

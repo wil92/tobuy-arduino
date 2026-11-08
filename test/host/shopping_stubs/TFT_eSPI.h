@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <Fonts/GFXFF/FreeSans9pt7b.h>
+#include <Fonts/GFXFF/FreeSansBold24pt7b.h>
 #define TFT_BLACK 0
 #define TFT_WHITE 1
 #define TFT_RED 2
@@ -36,6 +37,7 @@ public:
     std::vector<Circle> circles;
     int textSize = 1;
     bool freeFont = false;
+    bool largeFont = false;
     uint16_t foreground = TFT_WHITE;
     uint16_t background = TFT_BLACK;
     uint16_t screenColor = TFT_BLACK;
@@ -50,16 +52,16 @@ public:
     void setTextColor(uint16_t color, uint16_t back) { foreground = color; background = back; }
     void setTextDatum(uint8_t) {}
     void setTextSize(uint8_t size) { textSize = size; }
-    void setFreeFont(const GFXfont *) { freeFont = true; }
-    void setTextFont(uint8_t) { freeFont = false; }
+    void setFreeFont(const GFXfont *font) { freeFont = true; largeFont = font->size == 24; }
+    void setTextFont(uint8_t) { freeFont = false; largeFont = false; }
     int drawString(const char *value, int x, int y, int font) {
         if (y >= viewportBottom || y + fontHeight(font) <= viewportTop) return 0;
         text.push_back(value);
         textDraws.push_back({value, x, y, font, textSize, foreground, background});
         return 1;
     }
-    int textWidth(const char *value, int font) { return std::strlen(value) * (font == 1 && freeFont ? 10 : 8) * textSize; }
-    int fontHeight(int font) { return (font == 1 && freeFont ? 22 : 16) * textSize; }
+    int textWidth(const char *value, int font) { return std::strlen(value) * (font == 1 && freeFont ? (largeFont ? 26 : 10) : 8) * textSize; }
+    int fontHeight(int font) { return (font == 1 && freeFont ? (largeFont ? 52 : 22) : 16) * textSize; }
     void setViewport(int, int y, int, int height, bool) { viewportTop = y; viewportBottom = y + height; }
     void resetViewport() { viewportTop = 0; viewportBottom = height(); }
     void drawLine(int, int, int, int, uint16_t) {}

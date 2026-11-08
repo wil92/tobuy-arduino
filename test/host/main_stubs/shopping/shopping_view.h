@@ -6,7 +6,7 @@ public:
     ShoppingView(TFT_eSPI &, ShoppingClient &) {}
     int begins = 0;
     int updates = 0;
-    void begin() { ++begins; }
+    void begin(const char *) { ++begins; }
     void update() { ++updates; }
     void render() {}
 };

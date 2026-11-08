@@ -6,11 +6,12 @@
 #include <XPT2046_Touchscreen.h>
 
 #include "shopping_client.h"
+#include "../temperature/temperature_client.h"
 
 class ShoppingView {
 public:
     ShoppingView(TFT_eSPI &display, ShoppingClient &client);
-    void begin();
+    void begin(const char *serverUrl);
     void update();
     void render();
 
@@ -25,6 +26,7 @@ private:
     bool validCalibration() const;
     void drawCalibration();
     void drawStatus();
+    void drawTemperature();
     bool mapTouch(const TS_Point &point, int &x, int &y) const;
     void onRelease(int x, int y);
     void updateLayout();
@@ -33,6 +35,7 @@ private:
 
     TFT_eSPI &display_;
     ShoppingClient &client_;
+    TemperatureClient temperature_;
     SPIClass touchSpi_{HSPI};
     XPT2046_Touchscreen touch_{TOBUY_TOUCH_CS};
     Preferences preferences_;
@@ -42,6 +45,7 @@ private:
     bool touchReady_ = false;
     bool touched_ = false;
     bool calibrationPress_ = false;
+    bool temperatureVisible_ = false;
     int startX_ = 0;
     int startY_ = 0;
     int lastX_ = 0;

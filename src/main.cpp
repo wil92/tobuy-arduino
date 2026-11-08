@@ -62,7 +62,7 @@ void setup() {
             Serial.println("Server URL missing or invalid; reset to configure");
             display.showError("Configure server URL");
         } else {
-            shoppingView.begin();
+            shoppingView.begin(server.url);
             shoppingClient.begin(server.url, redrawShopping);
             shoppingActive = true;
         }

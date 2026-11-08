@@ -1,8 +1,8 @@
 # To Buy Arduino
 
-ESP32 firmware for a real-time shopping list display. The device fetches the
-list over HTTP, receives updates over WebSocket, and lets users change periodic
-items on the touchscreen.
+ESP32 firmware for a real-time shopping list and current temperature display.
+The device fetches the list over HTTP, receives updates over WebSocket, and
+lets users change periodic items and swipe horizontally to switch screens.
 
 The `esp32dev` PlatformIO environment uses Arduino and targets the
 [LCDWiki 2.8-inch ESP32-32E display](https://www.lcdwiki.com/2.8inch_ESP32-32E_Display)
