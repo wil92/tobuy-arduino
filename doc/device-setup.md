@@ -14,16 +14,17 @@ commands.
 ## Display
 
 While the device is in Wi-Fi setup mode, the display shows the setup hotspot
-name, its password, and the setup page address. In normal mode it displays
-periodic items with ON/OFF switches and non-periodic missing items with red X
-buttons. ON means the periodic item is needed. Controls appear to the left of
-the item names. Tap an X to mark a missing item completed in Google Keep; this
+name, its password, and the setup page address. In normal mode, the shopping
+list has a **Comprar** heading. It displays periodic items with SI/NO switches
+and non-periodic missing items with red X buttons. SI means the periodic item is
+needed. Controls appear to the left of the item names. Tap an X to mark a
+missing item completed in Google Keep; this
 does not permanently delete it. Periodic items cannot be removed this way.
 The display waits for the server's updated list rather than changing it locally.
 Swipe vertically or drag the right-hand scrollbar to scroll. Long
 item names wrap over multiple lines. The top-right status indicator shows
-connection and update errors; an animated indicator denotes connection attempts
-or a pending update. The last list may remain visible but controls are disabled
+connection and update messages in Spanish; an animated indicator denotes
+connection attempts or a pending update. The last list may remain visible but controls are disabled
 while disconnected or another update is pending. The footer shows the visible
 item range and total.
 

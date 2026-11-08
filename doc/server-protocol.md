@@ -39,9 +39,12 @@ names are nonempty strings of at most 64 UTF-8 bytes. `needed` is a JSON
 boolean and required for periodic items. Both arrays are required, may be
 empty, and may contain at most 64 items combined. Messages must be no larger
 than 8192 UTF-8 bytes and must not be fragmented WebSocket messages. Names
-are rendered with the TFT font and wrap over multiple lines; unsupported characters
-may not display correctly. Invalid or oversized lists are rejected, preserving the
-last valid list and displaying an error.
+are rendered with the TFT font and wrap over multiple lines. The display
+supports common accented vowels (acute, grave, circumflex, tilde and diaeresis),
+ñ, and German umlauts; ß is rendered as `ss`. Other unsupported characters
+appear as `?`. Temperature city and country names use the same character
+support. Invalid or oversized lists are rejected, preserving the last valid
+list and displaying an error.
 
 ## Periodic item changes
 

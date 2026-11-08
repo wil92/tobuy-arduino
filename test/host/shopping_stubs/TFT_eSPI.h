@@ -22,6 +22,7 @@ public:
         int size;
         uint16_t color;
         uint16_t background;
+        bool freeFont;
     };
     struct Rectangle {
         int x;
@@ -30,10 +31,12 @@ public:
         int height;
         uint16_t color;
     };
+    struct Line { int x1; int y1; int x2; int y2; uint16_t color; };
     struct Circle { int x; int y; int radius; uint16_t color; bool filled; };
     std::vector<std::string> text;
     std::vector<TextDraw> textDraws;
     std::vector<Rectangle> rectangles;
+    std::vector<Line> lines;
     std::vector<Circle> circles;
     int textSize = 1;
     bool freeFont = false;
@@ -47,7 +50,7 @@ public:
     int32_t height() { return 320; }
     void fillScreen(uint16_t color) {
         screenColor = color;
-        text.clear(); textDraws.clear(); rectangles.clear(); circles.clear();
+        text.clear(); textDraws.clear(); rectangles.clear(); lines.clear(); circles.clear();
     }
     void setTextColor(uint16_t color, uint16_t back) { foreground = color; background = back; }
     void setTextDatum(uint8_t) {}
@@ -57,22 +60,26 @@ public:
     int drawString(const char *value, int x, int y, int font) {
         if (y >= viewportBottom || y + fontHeight(font) <= viewportTop) return 0;
         text.push_back(value);
-        textDraws.push_back({value, x, y, font, textSize, foreground, background});
+        textDraws.push_back({value, x, y, font, textSize, foreground, background, freeFont});
         return 1;
     }
-    int textWidth(const char *value, int font) { return std::strlen(value) * (font == 1 && freeFont ? (largeFont ? 26 : 10) : 8) * textSize; }
-    int fontHeight(int font) { return (font == 1 && freeFont ? (largeFont ? 52 : 22) : 16) * textSize; }
+    int textWidth(const char *value, int font) {
+        return std::strlen(value) * (font == 1 ? (freeFont ? (largeFont ? 26 : 10) : 6) : 8) * textSize;
+    }
+    int fontHeight(int font) {
+        return (font == 1 ? (freeFont ? (largeFont ? 52 : 22) : 8) : 16) * textSize;
+    }
     void setViewport(int, int y, int, int height, bool) { viewportTop = y; viewportBottom = y + height; }
     void resetViewport() { viewportTop = 0; viewportBottom = height(); }
-    void drawLine(int, int, int, int, uint16_t) {}
+    void drawLine(int x1, int y1, int x2, int y2, uint16_t color) { lines.push_back({x1, y1, x2, y2, color}); }
     void drawFastHLine(int, int, int, uint16_t) {}
     void fillRect(int x, int y, int width, int height, uint16_t) {
         auto overlaps = [=](int left, int top, int right, int bottom) {
             return left < x + width && right > x && top < y + height && bottom > y;
         };
         for (auto it = textDraws.begin(); it != textDraws.end();) {
-            const int charWidth = it->font == 1 ? 10 : 8;
-            const int lineHeight = it->font == 1 ? 22 : 16;
+            const int charWidth = it->font == 1 ? (it->freeFont ? 10 : 6) : 8;
+            const int lineHeight = it->font == 1 ? (it->freeFont ? 22 : 8) : 16;
             if (overlaps(it->x, it->y, it->x + static_cast<int>(it->value.size()) * charWidth * it->size,
                          it->y + lineHeight * it->size)) {
                 for (auto textIt = text.begin(); textIt != text.end(); ++textIt) {

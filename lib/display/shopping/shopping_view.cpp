@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -33,28 +34,196 @@ constexpr uint16_t remove_color = 0xb904;
 constexpr unsigned long animation_interval_ms = 350;
 constexpr int page_swipe_distance = 50;
 
+enum class Accent : uint8_t {
+    none,
+    acute,
+    grave,
+    circumflex,
+    tilde,
+    diaeresis
+};
+
+struct AccentMark {
+    uint8_t character;
+    Accent accent;
+};
+
 struct StatusPresentation {
     const char *label;
     uint16_t color;
     bool animated;
 };
 
+char displayCharacter(uint32_t codepoint, Accent &accent) {
+    accent = Accent::none;
+    const int caseOffset = codepoint >= 0x00c0 && codepoint <= 0x00de ? 'A' - 'a' : 0;
+    switch (codepoint) {
+        case 0x00c0: case 0x00e0: accent = Accent::grave; return static_cast<char>('a' + caseOffset);
+        case 0x00c1: case 0x00e1: accent = Accent::acute; return static_cast<char>('a' + caseOffset);
+        case 0x00c2: case 0x00e2: accent = Accent::circumflex; return static_cast<char>('a' + caseOffset);
+        case 0x00c3: case 0x00e3: accent = Accent::tilde; return static_cast<char>('a' + caseOffset);
+        case 0x00c4: case 0x00e4: accent = Accent::diaeresis; return static_cast<char>('a' + caseOffset);
+        case 0x00c8: case 0x00e8: accent = Accent::grave; return static_cast<char>('e' + caseOffset);
+        case 0x00c9: case 0x00e9: accent = Accent::acute; return static_cast<char>('e' + caseOffset);
+        case 0x00ca: case 0x00ea: accent = Accent::circumflex; return static_cast<char>('e' + caseOffset);
+        case 0x00cc: case 0x00ec: accent = Accent::grave; return static_cast<char>('i' + caseOffset);
+        case 0x00cd: case 0x00ed: accent = Accent::acute; return static_cast<char>('i' + caseOffset);
+        case 0x00ce: case 0x00ee: accent = Accent::circumflex; return static_cast<char>('i' + caseOffset);
+        case 0x00d1: case 0x00f1: accent = Accent::tilde; return static_cast<char>('n' + caseOffset);
+        case 0x00d2: case 0x00f2: accent = Accent::grave; return static_cast<char>('o' + caseOffset);
+        case 0x00d3: case 0x00f3: accent = Accent::acute; return static_cast<char>('o' + caseOffset);
+        case 0x00d4: case 0x00f4: accent = Accent::circumflex; return static_cast<char>('o' + caseOffset);
+        case 0x00d5: case 0x00f5: accent = Accent::tilde; return static_cast<char>('o' + caseOffset);
+        case 0x00d6: case 0x00f6: accent = Accent::diaeresis; return static_cast<char>('o' + caseOffset);
+        case 0x00d9: case 0x00f9: accent = Accent::grave; return static_cast<char>('u' + caseOffset);
+        case 0x00da: case 0x00fa: accent = Accent::acute; return static_cast<char>('u' + caseOffset);
+        case 0x00db: case 0x00fb: accent = Accent::circumflex; return static_cast<char>('u' + caseOffset);
+        case 0x00dc: case 0x00fc: accent = Accent::diaeresis; return static_cast<char>('u' + caseOffset);
+        case 0x00dd: case 0x00fd: accent = Accent::acute; return static_cast<char>('y' + caseOffset);
+        default: return '?';
+    }
+}
+
+bool continuationByte(uint8_t byte) {
+    return (byte & 0xc0) == 0x80;
+}
+
+size_t decodeCodepoint(const char *text, uint32_t &codepoint) {
+    const uint8_t first = static_cast<uint8_t>(text[0]);
+    codepoint = first;
+    if (first < 0x80) return 1;
+    if (first >= 0xc2 && first <= 0xdf && text[1] && continuationByte(text[1])) {
+        codepoint = ((first & 0x1f) << 6) | (static_cast<uint8_t>(text[1]) & 0x3f);
+        return 2;
+    }
+    if (first >= 0xe0 && first <= 0xef && text[1] && text[2] &&
+        continuationByte(text[1]) && continuationByte(text[2])) {
+        const uint8_t second = static_cast<uint8_t>(text[1]);
+        if ((first != 0xe0 || second >= 0xa0) && (first != 0xed || second < 0xa0)) {
+            codepoint = ((first & 0x0f) << 12) | ((second & 0x3f) << 6) |
+                        (static_cast<uint8_t>(text[2]) & 0x3f);
+            return 3;
+        }
+    }
+    if (first >= 0xf0 && first <= 0xf4 && text[1] && text[2] && text[3] &&
+        continuationByte(text[1]) && continuationByte(text[2]) && continuationByte(text[3])) {
+        const uint8_t second = static_cast<uint8_t>(text[1]);
+        if ((first != 0xf0 || second >= 0x90) && (first != 0xf4 || second < 0x90)) {
+            codepoint = ((first & 0x07) << 18) | ((second & 0x3f) << 12) |
+                        ((static_cast<uint8_t>(text[2]) & 0x3f) << 6) |
+                        (static_cast<uint8_t>(text[3]) & 0x3f);
+            return 4;
+        }
+    }
+    codepoint = '?';
+    return 1;
+}
+
+bool toDisplayText(const char *text, char *output, size_t outputSize,
+                   AccentMark *marks, size_t markCapacity, size_t &markCount) {
+    size_t outputLength = 0;
+    markCount = 0;
+    while (*text) {
+        uint32_t codepoint;
+        const size_t consumed = decodeCodepoint(text, codepoint);
+        text += consumed;
+        if (codepoint >= 0x20 && codepoint < 0x7f) {
+            if (outputLength + 1 >= outputSize) return false;
+            output[outputLength++] = static_cast<char>(codepoint);
+            continue;
+        }
+        if (codepoint == 0x00df || codepoint == 0x1e9e) {
+            if (outputLength + 2 >= outputSize) return false;
+            output[outputLength++] = codepoint == 0x00df ? 's' : 'S';
+            output[outputLength++] = codepoint == 0x00df ? 's' : 'S';
+            continue;
+        }
+        Accent accent;
+        const char character = displayCharacter(codepoint, accent);
+        if (outputLength + 1 >= outputSize) return false;
+        if (accent != Accent::none && marks) {
+            if (markCount >= markCapacity) return false;
+            marks[markCount++] = {static_cast<uint8_t>(outputLength), accent};
+        }
+        output[outputLength++] = character;
+    }
+    output[outputLength] = '\0';
+    return true;
+}
+
+void drawAccent(TFT_eSPI &display, const AccentMark &mark, int x, int y, int scale, uint16_t color) {
+    switch (mark.accent) {
+        case Accent::acute:
+            display.drawLine(x - scale, y + 4 * scale, x + scale, y + scale, color);
+            break;
+        case Accent::grave:
+            display.drawLine(x - scale, y + scale, x + scale, y + 4 * scale, color);
+            break;
+        case Accent::circumflex:
+            display.drawLine(x - 3 * scale, y + 4 * scale, x, y + scale, color);
+            display.drawLine(x, y + scale, x + 3 * scale, y + 4 * scale, color);
+            break;
+        case Accent::tilde:
+            display.drawLine(x - 3 * scale, y + 2 * scale, x - scale, y + scale, color);
+            display.drawLine(x - scale, y + scale, x + scale, y + 2 * scale, color);
+            display.drawLine(x + scale, y + 2 * scale, x + 3 * scale, y + scale, color);
+            break;
+        case Accent::diaeresis:
+            display.drawLine(x - 3 * scale, y + scale, x - 2 * scale, y + scale, color);
+            display.drawLine(x + 2 * scale, y + scale, x + 3 * scale, y + scale, color);
+            break;
+        case Accent::none:
+            break;
+    }
+}
+
+int supportedTextWidth(TFT_eSPI &display, const char *text, int font) {
+    char converted[temperature::max_place_length + 1];
+    size_t markCount;
+    if (!toDisplayText(text, converted, sizeof(converted), nullptr, 0, markCount)) {
+        return display.textWidth("?", font);
+    }
+    return display.textWidth(converted, font);
+}
+
+void drawSupportedText(TFT_eSPI &display, const char *text, int x, int y, int font, int scale = 1,
+                       uint16_t accentColor = TFT_WHITE) {
+    char converted[temperature::max_place_length + 1];
+    AccentMark marks[temperature::max_place_length];
+    size_t markCount;
+    if (!toDisplayText(text, converted, sizeof(converted), marks, temperature::max_place_length, markCount)) {
+        Serial.println("Display text exceeds supported character buffer");
+        return;
+    }
+    display.drawString(converted, x, y, font);
+    for (size_t i = 0; i < markCount; ++i) {
+        const size_t character = marks[i].character;
+        const char saved = converted[character];
+        converted[character] = '\0';
+        const int prefixWidth = display.textWidth(converted, font);
+        converted[character] = saved;
+        char glyph[] = {saved, '\0'};
+        const int glyphWidth = display.textWidth(glyph, font);
+        drawAccent(display, marks[i], x + prefixWidth + glyphWidth / 2, y, scale, accentColor);
+    }
+}
+
 StatusPresentation statusPresentation(const char *status) {
-    if (std::strcmp(status, "Connected") == 0) return {"Connected", accent_color, false};
-    if (std::strcmp(status, "Connecting to Wi-Fi") == 0) return {"Wi-Fi connecting", warning_color, true};
-    if (std::strcmp(status, "Wi-Fi unavailable") == 0) return {"Wi-Fi unavailable", error_color, true};
-    if (std::strcmp(status, "Connecting to server") == 0) return {"Server connecting", warning_color, true};
-    if (std::strcmp(status, "Server unavailable") == 0) return {"Server unavailable", error_color, true};
-    if (std::strcmp(status, "Loading list") == 0) return {"Loading list", warning_color, true};
-    if (std::strcmp(status, "Waiting for server") == 0) return {"Saving", warning_color, true};
-    if (std::strcmp(status, "Update not confirmed") == 0) return {"Update timeout", error_color, false};
-    if (std::strcmp(status, "Update send failed") == 0) return {"Update failed", error_color, false};
-    if (std::strcmp(status, "Invalid server message") == 0) return {"Invalid message", error_color, false};
-    if (std::strcmp(status, "Invalid server response") == 0) return {"Invalid response", error_color, false};
-    if (std::strcmp(status, "Server needs http URL") == 0) return {"HTTP required", error_color, false};
-    if (std::strcmp(status, "Invalid server URL") == 0) return {"Invalid URL", error_color, false};
-    if (std::strcmp(status, "Out of memory") == 0) return {"Out of memory", error_color, false};
-    return {"Server error", error_color, false};
+    if (std::strcmp(status, "Connected") == 0) return {"Conectado", accent_color, false};
+    if (std::strcmp(status, "Connecting to Wi-Fi") == 0) return {"Conectando Wi-Fi", warning_color, true};
+    if (std::strcmp(status, "Wi-Fi unavailable") == 0) return {"Wi-Fi sin conexion", error_color, true};
+    if (std::strcmp(status, "Connecting to server") == 0) return {"Conectando...", warning_color, true};
+    if (std::strcmp(status, "Server unavailable") == 0) return {"Sin servidor", error_color, true};
+    if (std::strcmp(status, "Loading list") == 0) return {"Cargando lista", warning_color, true};
+    if (std::strcmp(status, "Waiting for server") == 0) return {"Guardando", warning_color, true};
+    if (std::strcmp(status, "Update not confirmed") == 0) return {"Tiempo agotado", error_color, false};
+    if (std::strcmp(status, "Update send failed") == 0) return {"Error al enviar", error_color, false};
+    if (std::strcmp(status, "Invalid server message") == 0) return {"Mensaje invalido", error_color, false};
+    if (std::strcmp(status, "Invalid server response") == 0) return {"Respuesta invalida", error_color, false};
+    if (std::strcmp(status, "Server needs http URL") == 0) return {"Requiere HTTP", error_color, false};
+    if (std::strcmp(status, "Invalid server URL") == 0) return {"URL invalida", error_color, false};
+    if (std::strcmp(status, "Out of memory") == 0) return {"Sin memoria", error_color, false};
+    return {"Error del servidor", error_color, false};
 }
 
 bool nextLine(TFT_eSPI &display, const char *name, size_t &offset, int availableWidth, char *line) {
@@ -69,7 +238,7 @@ bool nextLine(TFT_eSPI &display, const char *name, size_t &offset, int available
         const size_t length = next - start;
         std::memcpy(line, name + start, length);
         line[length] = '\0';
-        if (display.textWidth(line, item_font) > availableWidth && end > start) break;
+        if (supportedTextWidth(display, line, item_font) > availableWidth && end > start) break;
         if (name[end] == ' ') lastSpace = end;
         end = next;
     }
@@ -138,8 +307,8 @@ void ShoppingView::drawTemperature() {
         const int locationTop = display_.height() - temperature_location_area;
         const int locationLineHeight = display_.fontHeight(2);
         display_.setViewport(6, locationTop, display_.width() - 12, locationLineHeight * 2, false);
-        display_.drawString(temperature_.reading().city, 6, locationTop, 2);
-        display_.drawString(temperature_.reading().country, 6, locationTop + locationLineHeight, 2);
+        drawSupportedText(display_, temperature_.reading().city, 6, locationTop, 2, 2);
+        drawSupportedText(display_, temperature_.reading().country, 6, locationTop + locationLineHeight, 2, 2);
         display_.resetViewport();
     }
     display_.setTextSize(1);
@@ -253,7 +422,7 @@ void ShoppingView::render() {
     display_.setTextDatum(TL_DATUM);
     display_.setTextSize(1);
     display_.setTextColor(TFT_WHITE, background_color);
-    display_.drawString("TO BUY", 8, 6, 2);
+    display_.drawString("Comprar", 8, 6, 2);
     drawStatus();
     display_.drawFastHLine(8, heading_height - 2, display_.width() - 16, separator_color);
     display_.setTextColor(muted_color, background_color);
@@ -277,12 +446,12 @@ void ShoppingView::render() {
         char line[shopping::max_name_length + 1];
         const int textWidth = std::max(1, display_.width() - item_text_x - scrollbar_width - 2 * scrollbar_margin);
         while (nextLine(display_, item.name, offset, textWidth, line)) {
-            display_.drawString(line, item_text_x, lineY, item_font);
+            drawSupportedText(display_, line, item_text_x, lineY, item_font);
             lineY += lineHeight;
         }
         display_.setTextFont(2);
         const uint16_t color = item.periodic ? (item.needed ? switch_on_color : switch_off_color) : remove_color;
-        const char *label = item.periodic ? (item.needed ? "ON" : "OFF") : "X";
+        const char *label = item.periodic ? (item.needed ? "SI" : "NO") : "X";
         display_.fillRoundRect(switch_x, y + switch_y_offset, switch_width, switch_height, 8, color);
         display_.setTextColor(TFT_WHITE, color);
         display_.drawString(label, switch_x + (switch_width - display_.textWidth(label, 2)) / 2,

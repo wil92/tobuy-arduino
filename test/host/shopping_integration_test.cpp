@@ -101,20 +101,20 @@ int main() {
     swipe(view, 230, 55, 190, 55);
     assert(hasText(display, "1-6/10") && socket.sent.empty());
     swipe(view, 120, 200, 180, 120);
-    assert(hasText(display, "TO BUY") && hasText(display, "Item5"));
+    assert(hasText(display, "Comprar") && hasText(display, "Item5"));
     touch(view, 230, 55);
     assert(hasText(display, "Milk"));
     swipe(view, 30, 40, 120, 45);
     assert(hasText(display, "Loading temperature") && socket.sent.empty());
-    FakeHttp::body = R"({"city":"London","country":"United Kingdom","temperature":12.3,"unit":"°C"})";
+    FakeHttp::body = R"({"city":"MÁLAGA","country":"ESPAÑA","temperature":12.3,"unit":"°C"})";
     runFakeTask(0);
     view.update();
     assert(FakeHttp::url == "http://server:3000/temperature");
-    assert(hasText(display, "12.3") && hasText(display, "C") && hasText(display, "London"));
+    assert(hasText(display, "12.3") && hasText(display, "C") && hasText(display, "MALAGA"));
     const auto city = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                                   [](const TFT_eSPI::TextDraw &draw) { return draw.value == "London"; });
+                                   [](const TFT_eSPI::TextDraw &draw) { return draw.value == "MALAGA"; });
     const auto country = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                                      [](const TFT_eSPI::TextDraw &draw) { return draw.value == "United Kingdom"; });
+                                      [](const TFT_eSPI::TextDraw &draw) { return draw.value == "ESPANA"; });
     const auto reading = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                       [](const TFT_eSPI::TextDraw &draw) { return draw.value == "12.3"; });
     assert(city != display.textDraws.end() && country != display.textDraws.end() &&
@@ -157,11 +157,11 @@ int main() {
     FakeHttp::body = list(10, false);
     WiFi.currentStatus = WL_DISCONNECTED;
     client.update();
-    assert(hasText(display, "Wi-Fi unavailable"));
+    assert(hasText(display, "Wi-Fi sin conexion"));
     auto offline = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                                [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Wi-Fi unavailable"; });
+                                [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Wi-Fi sin conexion"; });
     auto title = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                              [](const TFT_eSPI::TextDraw &draw) { return draw.value == "TO BUY"; });
+                              [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Comprar"; });
     assert(offline != display.textDraws.end() && title != display.textDraws.end() &&
            offline->y == title->y && offline->x >= title->x + 6 * 8 &&
            offline->x + static_cast<int>(offline->value.size()) * 8 <= display.width());
@@ -185,13 +185,13 @@ int main() {
     assert(display.rectangles.size() == cardsBeforeAnimation && hasText(display, "Milk"));
     WiFi.currentStatus = WL_CONNECTED;
     client.update();
-    assert(hasText(display, "Server connecting"));
-    assert(textColor(display, "Server connecting") != offlineColor);
+    assert(hasText(display, "Conectando..."));
+    assert(textColor(display, "Conectando...") != offlineColor);
     fakeMillis += 5000;
     client.update();
-    assert(hasText(display, "Server unavailable"));
+    assert(hasText(display, "Sin servidor"));
     socket.event(WStype_CONNECTED);
-    assert(hasText(display, "Loading list"));
+    assert(hasText(display, "Cargando lista"));
     client.update();
     assert(!Preferences::saved.empty() && hasText(display, "Milk") && hasText(display, "Item3"));
     assert(hasText(display, "Item5") && !hasText(display, "Item6"));
@@ -219,11 +219,11 @@ int main() {
                                    });
     assert(removeRect != display.rectangles.end() && removeRect->color == 0xb904);
     assert(hasText(display, "1-6/10"));
-    const uint16_t connectedColor = textColor(display, "Connected");
+    const uint16_t connectedColor = textColor(display, "Conectado");
     auto connected = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                                  [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Connected"; });
+                                  [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Conectado"; });
     auto heading = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                                [](const TFT_eSPI::TextDraw &draw) { return draw.value == "TO BUY"; });
+                                [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Comprar"; });
     assert(connected != display.textDraws.end() && heading != display.textDraws.end());
     assert(connected->y == heading->y && connected->x > heading->x &&
            connected->x + 9 * 8 <= display.width() - 8);
@@ -258,16 +258,16 @@ int main() {
     touch(view, 30, 40);
     assert(socket.sent.find("\"id\":\"milk\"") != std::string::npos);
     assert(socket.sent.find("\"needed\":true") != std::string::npos);
-    const uint16_t waitingColor = textColor(display, "Saving");
+    const uint16_t waitingColor = textColor(display, "Guardando");
     assert(waitingColor != connectedColor);
     fakeMillis += 350;
     view.update();
-    assert(hasText(display, "Saving") && hasText(display, "Milk"));
+    assert(hasText(display, "Guardando") && hasText(display, "Milk"));
     assert(!client.list().items[0].needed);
     assert(!client.toggle(0));
     socket.event(WStype_TEXT, list(11, true));
     assert(client.list().items[0].needed);
-    assert(hasText(display, "ON"));
+    assert(hasText(display, "SI"));
     switchRect = std::find_if(display.rectangles.begin(), display.rectangles.end(),
                               [](const TFT_eSPI::Rectangle &rect) {
                                   return rect.x == 8 && rect.y == 34 && rect.width == 35 && rect.height == 40;
@@ -322,14 +322,15 @@ int main() {
     assert(client.ready() && client.list().revision == 16);
     socket.event(WStype_DISCONNECTED);
     assert(!client.ready() && std::strcmp(client.status(), "Server unavailable") == 0);
-    assert(textColor(display, "Server unavailable") != connectedColor &&
-           textColor(display, "Server unavailable") != waitingColor);
+    assert(textColor(display, "Sin servidor") != connectedColor &&
+           textColor(display, "Sin servidor") != waitingColor);
     const auto unavailable = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                           [](const TFT_eSPI::TextDraw &draw) {
-                                              return draw.value == "Server unavailable";
+                                              return draw.value == "Sin servidor";
                                           });
     assert(unavailable != display.textDraws.end() && unavailable->y == 6 &&
-           unavailable->x >= 85 && unavailable->x + 18 * 8 <= display.width() - 8);
+           unavailable->x >= 85 &&
+           unavailable->x + static_cast<int>(unavailable->value.size()) * 8 <= display.width() - 8);
     socket.event(WStype_CONNECTED);
     FakeHttp::code = 500;
     client.update();
@@ -397,7 +398,7 @@ int main() {
     touch(view, 50, 90);
     assert(FakeHttp::method != "DELETE");
     touch(view, 30, 90);
-    assert(hasText(display, "Saving") && hasText(display, "Bread"));
+    assert(hasText(display, "Guardando") && hasText(display, "Bread"));
     assert(!client.removeMissing(1) && !client.toggle(0));
     FakeHttp::deleteBody = removedList;
     runFakeTask(1);
@@ -414,7 +415,7 @@ int main() {
     runFakeTask(1);
     FakeHttp::body = R"({"type":"list","revision":11,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
     client.update();
-    assert(!client.ready() && hasText(display, "Update failed") && hasText(display, "Tea"));
+    assert(!client.ready() && hasText(display, "Error al enviar") && hasText(display, "Tea"));
     fakeMillis += 5000;
     client.update();
     assert(client.ready() && hasText(display, "Tea") && FakeHttp::method == "GET");
@@ -432,7 +433,7 @@ int main() {
     FakeHttp::deleteBody = "{invalid";
     runFakeTask(1);
     client.update();
-    assert(!client.ready() && hasText(display, "Invalid response") && hasText(display, "Tea"));
+    assert(!client.ready() && hasText(display, "Respuesta invalida") && hasText(display, "Tea"));
     FakeHttp::body = R"({"type":"list","revision":13,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
     fakeMillis += 5000;
     client.update();
@@ -442,7 +443,7 @@ int main() {
     FakeHttp::deleteBody = FakeHttp::body;
     runFakeTask(1);
     client.update();
-    assert(!client.ready() && hasText(display, "Update timeout") && hasText(display, "Tea"));
+    assert(!client.ready() && hasText(display, "Tiempo agotado") && hasText(display, "Tea"));
     fakeMillis += 5000;
     client.update();
     assert(client.ready());
@@ -462,7 +463,7 @@ int main() {
     FakeHttp::deleteCode = 404;
     runFakeTask(1);
     client.update();
-    assert(!client.ready() && hasText(display, "Update failed"));
+    assert(!client.ready() && hasText(display, "Error al enviar"));
     fakeMillis += 5000;
     client.update();
     assert(client.ready() && hasText(display, "Tea"));
@@ -472,7 +473,7 @@ int main() {
     FakeHttp::deleteBody = std::string(shopping::max_message_length + 1, 'x');
     runFakeTask(1);
     client.update();
-    assert(!client.ready() && hasText(display, "Invalid response") && hasText(display, "Tea"));
+    assert(!client.ready() && hasText(display, "Respuesta invalida") && hasText(display, "Tea"));
     fakeMillis += 5000;
     client.update();
     assert(client.ready());
@@ -498,6 +499,11 @@ int main() {
     assert(hasText(secondDisplay, "Touch the cross"));
     XPT2046_Touchscreen::down = false;
     secondView.update();
+
+    socket.event(WStype_TEXT,
+                 R"({"type":"list","revision":2,"periodic":[{"id":"accent","name":"Árbol ñ ü ä ö ß","needed":true}],"missing":[{"id":"umlauts","name":"ÄÖÜ"}]})");
+    assert(hasText(display, "Arbol n u a o ss"));
+    assert(hasText(display, "AOU") && display.lines.size() >= 16);
 
     ShoppingClient secure;
     secure.begin("https://server", nullptr);
