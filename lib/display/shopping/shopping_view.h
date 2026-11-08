@@ -24,9 +24,12 @@ private:
     };
     bool validCalibration() const;
     void drawCalibration();
+    void drawStatus();
     bool mapTouch(const TS_Point &point, int &x, int &y) const;
     void onRelease(int x, int y);
-    size_t visibleRows() const;
+    void updateLayout();
+    int viewportHeight() const;
+    int maxScroll() const;
 
     TFT_eSPI &display_;
     ShoppingClient &client_;
@@ -44,5 +47,8 @@ private:
     int lastX_ = 0;
     int lastY_ = 0;
     unsigned long touchStartedAt_ = 0;
-    size_t firstRow_ = 0;
+    unsigned long lastAnimationAt_ = 0;
+    uint8_t animationFrame_ = 0;
+    int itemOffsets_[shopping::max_items + 1] = {};
+    int scrollOffset_ = 0;
 };

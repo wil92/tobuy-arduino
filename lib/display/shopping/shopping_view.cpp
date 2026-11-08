@@ -2,12 +2,13 @@
 
 #include <Arduino.h>
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 namespace {
 constexpr uint32_t calibration_magic = 0x544f4259;
-constexpr int heading_height = 54;
+constexpr int heading_height = 30;
 constexpr int footer_height = 40;
 constexpr int row_height = 50;
 constexpr int switch_x = 8;
@@ -15,7 +16,70 @@ constexpr int switch_y_offset = 4;
 constexpr int switch_width = 70;
 constexpr int switch_height = 40;
 constexpr int item_text_x = switch_x + switch_width + 10;
-constexpr int item_text_size = 2;
+constexpr int item_font = 1;
+constexpr int scrollbar_width = 8;
+constexpr int scrollbar_margin = 4;
+constexpr uint16_t background_color = 0x0862;
+constexpr uint16_t card_color = 0x1944;
+constexpr uint16_t separator_color = 0x3186;
+constexpr uint16_t muted_color = 0xb5b6;
+constexpr uint16_t accent_color = 0x4f32;
+constexpr uint16_t warning_color = 0xfce6;
+constexpr uint16_t error_color = 0xfbaa;
+constexpr uint16_t switch_on_color = 0x03c5;
+constexpr uint16_t switch_off_color = 0x4209;
+constexpr uint16_t button_color = 0x2946;
+constexpr unsigned long animation_interval_ms = 350;
+
+struct StatusPresentation {
+    const char *label;
+    uint16_t color;
+    bool animated;
+};
+
+StatusPresentation statusPresentation(const char *status) {
+    if (std::strcmp(status, "Connected") == 0) return {"Connected", accent_color, false};
+    if (std::strcmp(status, "Connecting to Wi-Fi") == 0) return {"Wi-Fi connecting", warning_color, true};
+    if (std::strcmp(status, "Wi-Fi unavailable") == 0) return {"Wi-Fi unavailable", error_color, true};
+    if (std::strcmp(status, "Connecting to server") == 0) return {"Server connecting", warning_color, true};
+    if (std::strcmp(status, "Server unavailable") == 0) return {"Server unavailable", error_color, true};
+    if (std::strcmp(status, "Loading list") == 0) return {"Loading list", warning_color, true};
+    if (std::strcmp(status, "Waiting for server") == 0) return {"Saving", warning_color, true};
+    if (std::strcmp(status, "Update not confirmed") == 0) return {"Update timeout", error_color, false};
+    if (std::strcmp(status, "Update send failed") == 0) return {"Update failed", error_color, false};
+    if (std::strcmp(status, "Invalid server message") == 0) return {"Invalid message", error_color, false};
+    if (std::strcmp(status, "Invalid server response") == 0) return {"Invalid response", error_color, false};
+    if (std::strcmp(status, "Server needs http URL") == 0) return {"HTTP required", error_color, false};
+    if (std::strcmp(status, "Invalid server URL") == 0) return {"Invalid URL", error_color, false};
+    if (std::strcmp(status, "Out of memory") == 0) return {"Out of memory", error_color, false};
+    return {"Server error", error_color, false};
+}
+
+bool nextLine(TFT_eSPI &display, const char *name, size_t &offset, int availableWidth, char *line) {
+    while (name[offset] == ' ') ++offset;
+    if (!name[offset]) return false;
+    const size_t start = offset;
+    size_t end = start;
+    size_t lastSpace = start;
+    while (name[end] && name[end] != '\n') {
+        size_t next = end + 1;
+        while (name[next] && (static_cast<unsigned char>(name[next]) & 0xc0) == 0x80) ++next;
+        const size_t length = next - start;
+        std::memcpy(line, name + start, length);
+        line[length] = '\0';
+        if (display.textWidth(line, item_font) > availableWidth && end > start) break;
+        if (name[end] == ' ') lastSpace = end;
+        end = next;
+    }
+    if (name[end] && name[end] != '\n' && lastSpace > start) end = lastSpace;
+    size_t length = end - start;
+    while (length && name[start + length - 1] == ' ') --length;
+    std::memcpy(line, name + start, length);
+    line[length] = '\0';
+    offset = end;
+    if (name[offset] == '\n') ++offset;
+    return true;
+}
 }
 
 ShoppingView::ShoppingView(TFT_eSPI &display, ShoppingClient &client)
@@ -65,9 +129,59 @@ void ShoppingView::drawCalibration() {
     display_.drawLine(x, y - 10, x, y + 10, TFT_YELLOW);
 }
 
-size_t ShoppingView::visibleRows() const {
+int ShoppingView::viewportHeight() const {
     const int available = display_.height() - heading_height - footer_height;
-    return available > 0 ? static_cast<size_t>(available / row_height) : 0;
+    return std::max(0, available);
+}
+
+int ShoppingView::maxScroll() const {
+    return std::max(0, itemOffsets_[client_.list().count] - viewportHeight());
+}
+
+void ShoppingView::updateLayout() {
+    const shopping::List &list = client_.list();
+    const int textWidth = std::max(1, display_.width() - item_text_x - scrollbar_width - 2 * scrollbar_margin);
+    display_.setTextSize(1);
+    display_.setFreeFont(&FreeSans9pt7b);
+    const int lineHeight = display_.fontHeight(item_font);
+    itemOffsets_[0] = 0;
+    for (size_t i = 0; i < list.count; ++i) {
+        size_t offset = 0;
+        int lines = 0;
+        char line[shopping::max_name_length + 1];
+        while (nextLine(display_, list.items[i].name, offset, textWidth, line)) ++lines;
+        itemOffsets_[i + 1] = itemOffsets_[i] + std::max(row_height, lines * lineHeight + 10);
+    }
+    scrollOffset_ = std::min(scrollOffset_, maxScroll());
+    display_.setTextFont(2);
+}
+
+void ShoppingView::drawStatus() {
+    const StatusPresentation status = statusPresentation(client_.status());
+    display_.setTextSize(1);
+    display_.setTextFont(2);
+    display_.setTextDatum(TL_DATUM);
+    const int left = 73;
+    const int right = display_.width() - 8;
+    const int iconWidth = 12;
+    display_.fillRect(left, 0, display_.width() - left, heading_height - 2, background_color);
+    display_.setViewport(left + iconWidth, 0, right - left - iconWidth, heading_height - 2, false);
+    display_.setTextColor(status.color, background_color);
+    const int x = std::max(left + iconWidth, right - display_.textWidth(status.label, 2));
+    display_.drawString(status.label, x, 6, 2);
+    display_.resetViewport();
+    const int centerX = x - 9;
+    const int centerY = 14;
+    if (status.animated) {
+        static const int8_t dx[] = {0, 4, 0, -4};
+        static const int8_t dy[] = {-4, 0, 4, 0};
+        for (unsigned i = 0; i < 4; ++i) {
+            display_.fillCircle(centerX + dx[i], centerY + dy[i], 2,
+                                i == animationFrame_ ? status.color : separator_color);
+        }
+    } else {
+        display_.fillCircle(centerX, centerY, 3, status.color);
+    }
 }
 
 void ShoppingView::render() {
@@ -83,43 +197,78 @@ void ShoppingView::render() {
         return;
     }
     const shopping::List &list = client_.list();
-    const size_t rows = visibleRows();
-    const size_t maximum = list.count > rows ? list.count - rows : 0;
-    if (firstRow_ > maximum) firstRow_ = maximum;
-    display_.fillScreen(TFT_BLACK);
+    updateLayout();
+    const int viewport = viewportHeight();
+    const int maximum = maxScroll();
+    display_.fillScreen(background_color);
     display_.setTextDatum(TL_DATUM);
     display_.setTextSize(1);
-    display_.setTextColor(TFT_WHITE, TFT_BLACK);
-    display_.drawString("To buy", 8, 4, 2);
-    display_.setTextColor(client_.ready() ? TFT_GREEN : TFT_RED, TFT_BLACK);
-    display_.drawString(client_.status(), 8, 27, 2);
-    display_.setTextColor(TFT_WHITE, TFT_BLACK);
-    if (list.count == 0 && client_.ready()) display_.drawString("No items", 8, heading_height + 8, 2);
-    for (size_t row = 0; row < rows && firstRow_ + row < list.count; ++row) {
-        const shopping::Item &item = list.items[firstRow_ + row];
-        const int y = heading_height + static_cast<int>(row) * row_height;
-        char name[shopping::max_name_length + 1];
-        std::strcpy(name, item.name);
-        display_.setTextSize(item_text_size);
-        while (name[0] && display_.textWidth(name, 2) > display_.width() - item_text_x - 8) {
-            name[std::strlen(name) - 1] = '\0';
+    display_.setTextColor(TFT_WHITE, background_color);
+    display_.drawString("TO BUY", 8, 6, 2);
+    drawStatus();
+    display_.drawFastHLine(8, heading_height - 2, display_.width() - 16, separator_color);
+    display_.setTextColor(muted_color, background_color);
+    if (list.count == 0 && client_.ready()) display_.drawString("No items", 12, heading_height + 14, 2);
+    size_t firstVisible = list.count;
+    size_t lastVisible = 0;
+    display_.setViewport(0, heading_height, display_.width(), viewport, false);
+    for (size_t i = 0; i < list.count; ++i) {
+        const int y = heading_height + itemOffsets_[i] - scrollOffset_;
+        const int height = itemOffsets_[i + 1] - itemOffsets_[i];
+        if (itemOffsets_[i + 1] <= scrollOffset_ || itemOffsets_[i] >= scrollOffset_ + viewport) continue;
+        if (firstVisible == list.count) firstVisible = i;
+        lastVisible = i + 1;
+        const shopping::Item &item = list.items[i];
+        display_.fillRoundRect(4, y + 1, display_.width() - scrollbar_width - 3 * scrollbar_margin, height - 3, 5, card_color);
+        display_.setFreeFont(&FreeSans9pt7b);
+        display_.setTextColor(TFT_WHITE, TFT_WHITE);
+        const int lineHeight = display_.fontHeight(item_font);
+        size_t offset = 0;
+        int lineY = y + (height == row_height ? (row_height - lineHeight) / 2 : 5);
+        char line[shopping::max_name_length + 1];
+        const int textWidth = std::max(1, display_.width() - item_text_x - scrollbar_width - 2 * scrollbar_margin);
+        while (nextLine(display_, item.name, offset, textWidth, line)) {
+            display_.drawString(line, item_text_x, lineY, item_font);
+            lineY += lineHeight;
         }
-        display_.drawString(name, item_text_x, y + (row_height - display_.fontHeight(2)) / 2, 2);
-        display_.setTextSize(1);
+        display_.setTextFont(2);
         if (item.periodic) {
-            const uint16_t color = item.needed ? TFT_GREEN : TFT_DARKGREY;
+            const uint16_t color = item.needed ? switch_on_color : switch_off_color;
             display_.fillRoundRect(switch_x, y + switch_y_offset, switch_width, switch_height, 8, color);
             display_.setTextColor(TFT_WHITE, color);
             const char *label = item.needed ? "ON" : "OFF";
             display_.drawString(label, switch_x + (switch_width - display_.textWidth(label, 2)) / 2,
                                 y + switch_y_offset + (switch_height - display_.fontHeight(2)) / 2, 2);
-            display_.setTextColor(TFT_WHITE, TFT_BLACK);
+        } else {
+            display_.drawCircle(switch_x + switch_width / 2, y + row_height / 2, 5, muted_color);
         }
-        display_.drawFastHLine(0, y + row_height - 1, display_.width(), TFT_DARKGREY);
+    }
+    display_.resetViewport();
+    if (maximum > 0 && viewport > 0) {
+        const int trackX = display_.width() - scrollbar_width - scrollbar_margin;
+        const int total = itemOffsets_[list.count];
+        const int thumbHeight = std::max(16, viewport * viewport / total);
+        const int thumbY = heading_height + (viewport - thumbHeight) * scrollOffset_ / maximum;
+        display_.fillRoundRect(trackX, heading_height, scrollbar_width, viewport, 4, separator_color);
+        display_.fillRoundRect(trackX, thumbY, scrollbar_width, thumbHeight, 4, muted_color);
     }
     const int footer = display_.height() - footer_height;
-    display_.drawString(firstRow_ ? "UP" : "-", 20, footer + 10, 2);
-    display_.drawString(firstRow_ < maximum ? "DOWN" : "-", display_.width() - 80, footer + 10, 2);
+    display_.fillRoundRect(4, footer + 2, 68, 34, 5, button_color);
+    display_.fillRoundRect(display_.width() - 72, footer + 2, 68, 34, 5, button_color);
+    display_.setTextColor(scrollOffset_ ? TFT_WHITE : muted_color, button_color);
+    display_.drawString("UP", 25, footer + 10, 2);
+    display_.setTextColor(scrollOffset_ < maximum ? TFT_WHITE : muted_color, button_color);
+    display_.drawString("DOWN", display_.width() - 64, footer + 10, 2);
+    char position[24];
+    if (list.count && firstVisible < list.count) {
+        std::snprintf(position, sizeof(position), "%u-%u/%u",
+                      static_cast<unsigned>(firstVisible + 1),
+                      static_cast<unsigned>(lastVisible),
+                      static_cast<unsigned>(list.count));
+        display_.setTextColor(muted_color, background_color);
+        display_.drawString(position, (display_.width() - display_.textWidth(position, 2)) / 2,
+                            footer + 10, 2);
+    }
 }
 
 bool ShoppingView::mapTouch(const TS_Point &point, int &x, int &y) const {
@@ -140,6 +289,12 @@ bool ShoppingView::mapTouch(const TS_Point &point, int &x, int &y) const {
 
 void ShoppingView::update() {
     if (!touchReady_) return;
+    if (calibrated_ && statusPresentation(client_.status()).animated &&
+        static_cast<unsigned long>(millis() - lastAnimationAt_) >= animation_interval_ms) {
+        lastAnimationAt_ = millis();
+        animationFrame_ = (animationFrame_ + 1) % 4;
+        drawStatus();
+    }
     const bool down = touch_.touched();
     if (down) {
         const TS_Point point = touch_.getPoint();
@@ -173,7 +328,7 @@ void ShoppingView::update() {
                 }
                 lastX_ = x;
                 lastY_ = y;
-                if (startY_ < 25 && y < 25 &&
+                if (startX_ < 73 && x < 73 && startY_ < 25 && y < 25 &&
                     static_cast<unsigned long>(millis() - touchStartedAt_) >= 3000) {
                     calibrated_ = false;
                     calibrationStep_ = 0;
@@ -191,27 +346,42 @@ void ShoppingView::update() {
 
 void ShoppingView::onRelease(int x, int y) {
     const size_t count = client_.list().count;
-    const size_t rows = visibleRows();
-    if (rows == 0) return;
-    const size_t maximum = count > rows ? count - rows : 0;
+    const int viewport = viewportHeight();
+    if (viewport == 0) return;
+    const int maximum = maxScroll();
     const int delta = y - startY_;
-    if (std::abs(delta) > 25) {
-        const size_t amount = std::max(1, std::abs(delta) / row_height);
-        firstRow_ = delta < 0 ? std::min(maximum, firstRow_ + amount) :
-                               (amount > firstRow_ ? 0 : firstRow_ - amount);
+    if (maximum > 0 && startX_ >= display_.width() - scrollbar_width - 3 * scrollbar_margin &&
+        startY_ >= heading_height && startY_ < heading_height + viewport) {
+        const int thumbHeight = std::max(16, viewport * viewport / itemOffsets_[count]);
+        const int travel = viewport - thumbHeight;
+        if (travel > 0) {
+            const int thumbTop = (travel * scrollOffset_) / maximum;
+            if (startY_ - heading_height >= thumbTop && startY_ - heading_height < thumbTop + thumbHeight) {
+                scrollOffset_ = std::max(0, std::min(maximum, scrollOffset_ + delta * maximum / travel));
+            } else {
+                scrollOffset_ = std::max(0, std::min(maximum,
+                    (y - heading_height - thumbHeight / 2) * maximum / travel));
+            }
+        }
+        render();
+    } else if (std::abs(delta) > 25) {
+        scrollOffset_ = std::max(0, std::min(maximum, scrollOffset_ - delta));
         render();
     } else if (startY_ >= display_.height() - footer_height && y >= display_.height() - footer_height) {
-        if (x < display_.width() / 2 && firstRow_ > 0) --firstRow_;
-        else if (x >= display_.width() / 2 && firstRow_ < maximum) ++firstRow_;
+        if (x < display_.width() / 2) scrollOffset_ = std::max(0, scrollOffset_ - row_height);
+        else scrollOffset_ = std::min(maximum, scrollOffset_ + row_height);
         render();
     } else if (startY_ >= heading_height && startY_ < display_.height() - footer_height &&
                std::abs(y - startY_) < 15 && startX_ >= switch_x && startX_ < switch_x + switch_width &&
                x >= switch_x && x < switch_x + switch_width) {
-        const size_t row = static_cast<size_t>((startY_ - heading_height) / row_height);
-        const int switchTop = heading_height + static_cast<int>(row) * row_height + switch_y_offset;
-        if (row < rows && startY_ >= switchTop && startY_ < switchTop + switch_height &&
-            y >= switchTop && y < switchTop + switch_height) {
-            client_.toggle(firstRow_ + row);
+        for (size_t i = 0; i < count; ++i) {
+            const int switchTop = heading_height + itemOffsets_[i] - scrollOffset_ + switch_y_offset;
+            if (startY_ >= switchTop && startY_ < switchTop + switch_height &&
+                y >= switchTop && y < switchTop + switch_height &&
+                y >= heading_height && y < heading_height + viewport) {
+                client_.toggle(i);
+                break;
+            }
         }
     }
 }

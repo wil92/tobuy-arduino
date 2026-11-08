@@ -19,9 +19,12 @@ periodic items with ON/OFF switches and missing items without switches. ON
 means the periodic item is needed. Switches appear to the left of the larger
 item names. Tap a switch to request a change; the
 display waits for the server's updated list rather than changing it locally.
-Swipe vertically or tap UP/DOWN to scroll. The status line reports connection
-and update errors; the last list may remain visible but switches are disabled
-while disconnected.
+Swipe vertically, drag the right-hand scrollbar, or tap UP/DOWN to scroll. Long
+item names wrap over multiple lines. The top-right status indicator shows
+connection and update errors; an animated indicator denotes connection attempts
+or a pending update. The last list may remain visible but switches are disabled
+while disconnected. The footer shows the visible item range and total; a small
+circle marks a read-only missing item.
 
 On the first normal-mode startup, tap each cross to calibrate the resistive
 touchscreen. Calibration is saved separately from Wi-Fi settings. To recalibrate,
