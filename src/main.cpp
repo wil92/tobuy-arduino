@@ -48,11 +48,15 @@ void setup() {
     const auto result = flash.load(credentials);
     if (result == FlashManager::LoadResult::loaded) {
         network.connect(credentials.ssid, credentials.password);
-    } else if (result == FlashManager::LoadResult::invalid) {
-        Serial.println("Saved Wi-Fi settings are invalid; hold the reset button to clear them");
-    } else if (network.startHotspot(SETUP_AP_PASSWORD)) {
-        portal.begin();
-        portalActive = true;
+    } else {
+        if (result == FlashManager::LoadResult::invalid) {
+            Serial.println("Saved Wi-Fi settings are invalid; starting setup portal");
+        }
+        if (network.startHotspot(SETUP_AP_PASSWORD)) {
+            display.showSetupPassword(SETUP_AP_PASSWORD);
+            portal.begin();
+            portalActive = true;
+        }
     }
 }
 

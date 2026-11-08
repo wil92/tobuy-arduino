@@ -1,8 +1,11 @@
 #include <cassert>
+#include <algorithm>
 #include <cstring>
 
+#include "display_manager.h"
 #include "flash_manager.h"
 #include "network_manager.h"
+#include <TFT_eSPI.h>
 #include <WebServer.h>
 
 HardwareSerial Serial;
@@ -34,12 +37,18 @@ int main(int argc, char **argv) {
     if (std::strcmp(argv[1], "saved") == 0) {
         assert(WiFi.stationBegins == 1 && WiFi.hotspotBegins == 0);
         assert(WiFi.connectedSsid == "saved-network" && WiFi.connectedPassword == "12345678");
+        assert(TFT_eSPI::drawnText().empty());
     } else if (std::strcmp(argv[1], "invalid") == 0) {
-        assert(WiFi.stationBegins == 0 && WiFi.hotspotBegins == 0);
+        assert(WiFi.stationBegins == 0 && WiFi.hotspotBegins == 1);
+        assert(WebServer::instance->started);
+        assert(std::find(TFT_eSPI::drawnText().begin(), TFT_eSPI::drawnText().end(), "test-password") !=
+               TFT_eSPI::drawnText().end());
         assert(Serial.output.find("Saved Wi-Fi settings are invalid") != std::string::npos);
     } else {
         assert(WiFi.stationBegins == 0 && WiFi.hotspotBegins == 1);
         assert(WebServer::instance->started);
+        assert(std::find(TFT_eSPI::drawnText().begin(), TFT_eSPI::drawnText().end(), "test-password") !=
+               TFT_eSPI::drawnText().end());
         WebServer::instance->request("/", HTTP_GET);
         assert(WebServer::instance->code == 200);
     }

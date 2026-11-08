@@ -21,6 +21,7 @@ struct HardwareSerial {
     std::string output;
     void begin(unsigned long) {}
     void print(const char *text) { output += text; }
+    void print(int value) { output += std::to_string(value); }
     void println(const char *text) { output += std::string(text) + "\n"; }
     void println(int value) { output += std::to_string(value) + "\n"; }
 };

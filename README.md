@@ -15,12 +15,11 @@ It is configured for the [LCDWiki 2.8-inch ESP32-32E display](https://www.lcdwik
 (E32R28T / E32N28T). PlatformIO installs the configured platform and library
 dependencies when needed.
 
-## Sample display image
+## Display
 
-The firmware currently displays a built-in pixel-art landscape at startup. It
-scales the image to fit the display, with black borders where needed, and uses
-a small RGB565 buffer rather than a full-screen framebuffer. Image streaming
-and touch events are not implemented yet.
+While the device is in Wi-Fi setup mode, the display shows the setup hotspot
+name, its password, and the setup page address. Shopping-list rendering and
+touch events are not implemented yet.
 
 `platformio.ini` configures the board's ILI9341V display and enables its
 active-high backlight on GPIO21. The display shares the ESP32 reset line.
@@ -30,15 +29,21 @@ resolution, interface, GPIO wiring, and backlight before uploading. See
 Rebuild after changing the setup. The displayed colors and orientation also
 depend on the display's configuration.
 
+The setup screen requires TFT_eSPI font 2 (`LOAD_FONT2`). On startup, serial
+output reports the display dimensions and any missing-font or zero-width text
+errors. A drawing-commands-sent message does not verify the display hardware;
+if the screen stays blank, check the board model and display wiring.
+
 ## Wi-Fi setup
 
 1. Copy `include/setup_ap_config.example.h` to `include/setup_ap_config.h`
    and set `SETUP_AP_PASSWORD` to a unique 8-63 byte password. This ignored
    file is compiled into the firmware and must not be committed. The hotspot
    will not start if the password is missing or invalid.
-2. Build and upload the firmware, then open the serial monitor at 115200 baud.
-   When no Wi-Fi settings are saved, the device starts the `ToBuy-Setup`
-   hotspot and prints its password and address.
+2. Build and upload the firmware. When no valid Wi-Fi settings are saved, the
+   device starts the `ToBuy-Setup` hotspot and displays its password and
+   address. The password and address are also printed to the serial monitor at
+   115200 baud.
 3. Join that hotspot and open **http://192.168.1.1/**. Select a scanned
    network or enter an SSID manually, enter its password (leave it empty for an
    open network), and select **Configure device**. The device saves the settings
@@ -53,7 +58,8 @@ environment. The hotspot password is also printed on serial as requested.
 
 On subsequent boots the device connects in station mode without blocking the
 display and enables the Wi-Fi library's automatic reconnection. Connection
-status and the IP address are logged to serial. To change or clear settings,
+status and the IP address are logged to serial. Invalid saved settings also
+start the setup portal so they can be replaced. To change or clear settings,
 connect a momentary button between GPIO27 and GND and hold it for three
 seconds; the internal pull-up is enabled. GPIO27 is assigned to the optional
 SPI peripheral chip select on the documented board, but is unused by this
@@ -70,8 +76,8 @@ does not yet connect to a shopping-list server.
 
 Firmware components live under `lib/`: `network` manages Wi-Fi and scanning,
 `flash` stores settings, `portal` serves configuration requests, `display`
-renders the local image, and `components` contains the reset button. `src/main.cpp`
-coordinates their startup and update loops.
+renders the setup screen, and `components` contains the reset button.
+`src/main.cpp` coordinates their startup and update loops.
 
 ## Configuration frontend
 
@@ -90,8 +96,8 @@ Run these commands from the project root:
 pio run -e esp32dev
 
 # Run the host-side tests (requires a C++ compiler)
-g++ -std=c++11 -Wall -Wextra -Werror -Ilib/display test/host/sample_image_test.cpp -o /tmp/tobuy-sample-image-test
-/tmp/tobuy-sample-image-test
+g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/display test/host/display_manager_test.cpp lib/display/display_manager.cpp -o /tmp/tobuy-display-test
+/tmp/tobuy-display-test
 g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/stubs -Ilib/network test/host/wifi_connection_test.cpp -o /tmp/tobuy-wifi-connection-test
 /tmp/tobuy-wifi-connection-test
 g++ -std=c++11 -Wall -Wextra -Werror -Ilib/flash test/host/wifi_settings_test.cpp -o /tmp/tobuy-wifi-settings-test
@@ -112,7 +118,7 @@ node test/host/frontend_test.js
 pio run -e esp32dev -t upload
 ```
 
-The host tests check display rendering, Wi-Fi settings, portal endpoints, and
+The host tests check setup-screen rendering, Wi-Fi settings, portal endpoints, and
 the generated page with simulated hardware. They cannot verify the physical
 display, button wiring, or Wi-Fi connectivity. If PlatformIO cannot detect the board's serial port
 automatically, specify it with `--upload-port`, for example:

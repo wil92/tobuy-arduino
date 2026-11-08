@@ -5,6 +5,7 @@
 class DisplayManager {
 public:
     void begin();
+    void showSetupPassword(const char *password);
 
 private:
     TFT_eSPI display_;
