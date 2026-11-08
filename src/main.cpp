@@ -4,6 +4,8 @@
 #include "network_manager.h"
 #include "reset_button.h"
 #include "setup_portal.h"
+#include "shopping/shopping_client.h"
+#include "shopping/shopping_view.h"
 
 #if __has_include("setup_ap_config.h")
 #include "setup_ap_config.h"
@@ -22,8 +24,15 @@ NetworkManager network;
 FlashManager flash;
 ResetButton resetButton(RESET_CONFIG_PIN);
 SetupPortal portal(flash, network);
+ShoppingClient shoppingClient;
+ShoppingView shoppingView(display.screen(), shoppingClient);
 bool portalActive = false;
 bool storageReady = false;
+bool shoppingActive = false;
+
+void redrawShopping() {
+    shoppingView.render();
+}
 
 void checkResetButton() {
     if (!resetButton.update()) return;
@@ -48,6 +57,15 @@ void setup() {
     const auto result = flash.load(credentials);
     if (result == FlashManager::LoadResult::loaded) {
         network.connect(credentials.ssid, credentials.password);
+        server_settings::ServerUrl server = {};
+        if (flash.loadServer(server) != FlashManager::LoadResult::loaded) {
+            Serial.println("Server URL missing or invalid; reset to configure");
+            display.showError("Configure server URL");
+        } else {
+            shoppingView.begin();
+            shoppingClient.begin(server.url, redrawShopping);
+            shoppingActive = true;
+        }
     } else {
         if (result == FlashManager::LoadResult::invalid) {
             Serial.println("Saved Wi-Fi settings are invalid; starting setup portal");
@@ -63,5 +81,11 @@ void setup() {
 void loop() {
     if (storageReady) checkResetButton();
     if (portalActive) portal.update();
-    else network.update();
+    else {
+        network.update();
+        if (shoppingActive) {
+            shoppingClient.update();
+            shoppingView.update();
+        }
+    }
 }

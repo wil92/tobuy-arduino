@@ -18,6 +18,14 @@ void DisplayManager::begin() {
     }
 }
 
+void DisplayManager::showError(const char *message) {
+    display_.fillScreen(TFT_BLACK);
+    display_.setTextColor(TFT_WHITE, TFT_BLACK);
+    display_.setTextDatum(TC_DATUM);
+    display_.setTextFont(2);
+    display_.drawString(message, display_.width() / 2, 20);
+}
+
 void DisplayManager::showSetupPassword(const char *password) {
     constexpr size_t password_line_length = 24;
     char password_line[password_line_length + 1];
