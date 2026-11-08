@@ -14,6 +14,7 @@ public:
     void begin(const char *serverUrl);
     void update();
     void render();
+    void setTouchFlipped(bool flipped) { touchFlipped_ = flipped; }
 
 private:
     struct Calibration {
@@ -43,6 +44,7 @@ private:
     unsigned calibrationStep_ = 0;
     bool calibrated_ = false;
     bool touchReady_ = false;
+    bool touchFlipped_ = false;
     bool touched_ = false;
     bool calibrationPress_ = false;
     bool temperatureVisible_ = false;

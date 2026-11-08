@@ -11,6 +11,14 @@
 #include "setup_ap_config.h"
 #endif
 
+#if __has_include("display_setup.h")
+#include "display_setup.h"
+#endif
+
+#ifndef DISPLAY_FLIP_VERTICAL
+#define DISPLAY_FLIP_VERTICAL 0
+#endif
+
 #ifndef SETUP_AP_PASSWORD
 #define SETUP_AP_PASSWORD ""
 #endif
@@ -47,7 +55,8 @@ void checkResetButton() {
 void setup() {
     Serial.begin(115200);
     resetButton.begin();
-    display.begin();
+    display.begin(DISPLAY_FLIP_VERTICAL ? 2 : 0);
+    shoppingView.setTouchFlipped(DISPLAY_FLIP_VERTICAL);
     if (!flash.begin()) {
         Serial.println("Failed to open Wi-Fi settings storage");
         return;

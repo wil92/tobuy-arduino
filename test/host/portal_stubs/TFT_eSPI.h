@@ -12,6 +12,7 @@
 class TFT_eSPI {
 public:
     void init() {}
+    void setRotation(uint8_t) {}
     int32_t width() { return 240; }
     int32_t height() { return 320; }
     uint16_t fontsLoaded() { return loadedFonts(); }

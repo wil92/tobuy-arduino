@@ -50,8 +50,14 @@ active-high backlight on GPIO21. The display shares the ESP32 reset line.
 For a different board, change the TFT_eSPI build flags to match its controller,
 resolution, interface, GPIO wiring, and backlight before uploading. See
 [TFT_eSPI's setup selection file](https://github.com/Bodmer/TFT_eSPI/blob/master/User_Setup_Select.h).
-Rebuild after changing the setup. The displayed colors and orientation also
-depend on the display's configuration.
+Rebuild after changing the setup. The displayed colors also depend on the
+display's configuration.
+
+To flip the screen top/down (180 degrees), copy `include/display_setup.example.h`
+to `include/display_setup.h` and set `DISPLAY_FLIP_VERTICAL` to `1`. This
+optional, ignored file defaults to `0`, the original orientation. The touch
+coordinates are flipped with the display, and an existing calibration stays
+valid.
 
 The setup screen requires TFT_eSPI font 2 (`LOAD_FONT2`). On startup, serial
 output reports the display dimensions and any missing-font or zero-width text

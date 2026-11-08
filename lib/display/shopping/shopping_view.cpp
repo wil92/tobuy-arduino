@@ -511,7 +511,12 @@ void ShoppingView::update() {
     }
     const bool down = touch_.touched();
     if (down) {
-        const TS_Point point = touch_.getPoint();
+        TS_Point point = touch_.getPoint();
+        if (touchFlipped_) {
+            // Normalize raw readings to the default orientation so calibration stays valid.
+            point.x = 4095 - point.x;
+            point.y = 4095 - point.y;
+        }
         if (!calibrated_) {
             if (!touched_) {
                 calibrationPress_ = true;

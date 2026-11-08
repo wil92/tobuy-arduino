@@ -7,8 +7,9 @@
 #error "The setup screen requires TFT_eSPI font 2 (LOAD_FONT2)"
 #endif
 
-void DisplayManager::begin() {
+void DisplayManager::begin(uint8_t rotation) {
     display_.init();
+    display_.setRotation(rotation);
     Serial.print("Display initialized; dimensions: ");
     Serial.print(display_.width());
     Serial.print("x");

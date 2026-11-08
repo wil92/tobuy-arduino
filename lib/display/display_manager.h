@@ -4,7 +4,7 @@
 
 class DisplayManager {
 public:
-    void begin();
+    void begin(uint8_t rotation = 0);
     void showSetupPassword(const char *password);
     void showError(const char *message);
     TFT_eSPI &screen() { return display_; }

@@ -514,6 +514,20 @@ int main() {
     XPT2046_Touchscreen::down = false;
     secondView.update();
 
+    TFT_eSPI flippedDisplay;
+    ShoppingView flippedView(flippedDisplay, client);
+    flippedView.setTouchFlipped(true);
+    flippedView.begin("http://server:3000");
+    assert(hasText(flippedDisplay, "Milk") && !hasText(flippedDisplay, "Touch the cross"));
+    XPT2046_Touchscreen::point = {4095 - 300, 4095 - 100, 100};
+    XPT2046_Touchscreen::down = true;
+    flippedView.update();
+    fakeMillis += 3000;
+    flippedView.update();
+    assert(hasText(flippedDisplay, "Touch the cross"));
+    XPT2046_Touchscreen::down = false;
+    flippedView.update();
+
     socket.event(WStype_TEXT,
                  R"({"type":"list","revision":2,"periodic":[{"id":"accent","name":"Árbol ñ ü ä ö ß","needed":true}],"missing":[{"id":"umlauts","name":"ÄÖÜ"}]})");
     assert(hasText(display, "Arbol n u a o ss"));

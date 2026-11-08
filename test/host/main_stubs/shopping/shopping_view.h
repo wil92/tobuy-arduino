@@ -8,5 +8,6 @@ public:
     int updates = 0;
     void begin(const char *) { ++begins; }
     void update() { ++updates; }
+    void setTouchFlipped(bool) {}
     void render() {}
 };
