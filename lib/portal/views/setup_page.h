@@ -27,7 +27,7 @@ const char setup_page[] PROGMEM = R"TOBUY_PAGE(<!DOCTYPE html>
 </head>
 <body>
 <main>
-    <h1>Wi-Fi configuration</h1>
+    <h1>Device configuration</h1>
     <form id="config">
         <label for="ssid">SSID</label>
         <div class="network">
@@ -38,6 +38,9 @@ const char setup_page[] PROGMEM = R"TOBUY_PAGE(<!DOCTYPE html>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="new-password">
         <small>Leave empty for an open network.</small>
+        <label for="server">Server URL</label>
+        <input id="server" name="server" type="text" inputmode="url" autocomplete="off" placeholder="http://192.168.2.3:3000" required>
+        <small>For example http://192.168.2.3:3000 or http://tobuy.net</small>
         <div><button class="submit" id="save" type="submit">Configure device</button></div>
     </form>
     <p id="status" role="status" aria-live="polite"></p>
@@ -46,10 +49,12 @@ const char setup_page[] PROGMEM = R"TOBUY_PAGE(<!DOCTYPE html>
     const form = document.getElementById("config");
     const ssid = document.getElementById("ssid");
     const password = document.getElementById("password");
+    const server = document.getElementById("server");
     const networks = document.getElementById("networks");
     const status = document.getElementById("status");
     const refresh = document.getElementById("refresh");
     const save = document.getElementById("save");
+    const serverPattern = /^https?:\/\/[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:\d{1,5})?\/?$/;
     const bytes = value => new TextEncoder().encode(value).length;
 
     function showStatus(message, error = false) {
@@ -97,12 +102,19 @@ const char setup_page[] PROGMEM = R"TOBUY_PAGE(<!DOCTYPE html>
             showStatus("SSID must be 1-32 bytes. Password must be empty, 8-63 bytes, or 64 hexadecimal characters.", true);
             return;
         }
+        const serverValue = server.value.trim();
+        const port = serverValue.match(/:(\d+)\/?$/);
+        if (bytes(serverValue) > 127 || !serverPattern.test(serverValue) ||
+            (port && (Number(port[1]) < 1 || Number(port[1]) > 65535))) {
+            showStatus("Server URL must look like http://192.168.2.3:3000 or http://tobuy.net.", true);
+            return;
+        }
         save.disabled = true;
         try {
             const response = await fetch("/", {
                 method: "POST",
                 headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                body: new URLSearchParams({ssid: ssid.value, password: password.value})
+                body: new URLSearchParams({ssid: ssid.value, password: password.value, server: serverValue})
             });
             const message = await response.text();
             if (!response.ok) throw new Error(message);

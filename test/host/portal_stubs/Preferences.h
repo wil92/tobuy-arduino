@@ -13,23 +13,26 @@ public:
     bool readFails = false;
     bool removeFails = false;
     std::vector<char> saved;
+    std::vector<char> server;
+    std::vector<char> &slot(const char *key) { return std::strcmp(key, "server") == 0 ? server : saved; }
     bool begin(const char *, bool) { return beginOk; }
-    bool isKey(const char *) { return !saved.empty(); }
-    size_t getBytesLength(const char *) { return saved.size(); }
-    size_t getBytes(const char *, void *output, size_t length) {
-        if (readFails || length != saved.size()) return 0;
-        std::memcpy(output, saved.data(), length);
+    bool isKey(const char *key) { return !slot(key).empty(); }
+    size_t getBytesLength(const char *key) { return slot(key).size(); }
+    size_t getBytes(const char *key, void *output, size_t length) {
+        std::vector<char> &data = slot(key);
+        if (readFails || length != data.size()) return 0;
+        std::memcpy(output, data.data(), length);
         return length;
     }
-    bool remove(const char *) {
+    bool remove(const char *key) {
         if (removeFails) return false;
-        saved.clear();
+        slot(key).clear();
         return true;
     }
-    size_t putBytes(const char *, const void *value, size_t length) {
+    size_t putBytes(const char *key, const void *value, size_t length) {
         if (fail) return 0;
         const char *data = static_cast<const char *>(value);
-        saved.assign(data, data + length);
+        slot(key).assign(data, data + length);
         return length;
     }
 };

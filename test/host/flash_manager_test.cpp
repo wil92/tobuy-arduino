@@ -32,9 +32,18 @@ int main() {
     assert(flash.load(loaded) == FlashManager::LoadResult::loaded);
     assert(std::strcmp(loaded.ssid, "saved-network") == 0);
     assert(std::strcmp(loaded.password, "12345678") == 0);
+    server_settings::ServerUrl url = {};
+    assert(flash.loadServer(url) == FlashManager::LoadResult::missing);
+    assert(!flash.saveServer(url));
+    assert(server_settings::assign(url, "http://tobuy.net/"));
+    assert(flash.saveServer(url));
+    server_settings::ServerUrl loadedUrl = {};
+    assert(flash.loadServer(loadedUrl) == FlashManager::LoadResult::loaded);
+    assert(std::strcmp(loadedUrl.url, "http://tobuy.net") == 0);
     preferences.removeFails = true;
     assert(!flash.clear());
     preferences.removeFails = false;
     assert(flash.clear());
     assert(flash.load(loaded) == FlashManager::LoadResult::missing);
+    assert(flash.loadServer(loadedUrl) == FlashManager::LoadResult::missing);
 }

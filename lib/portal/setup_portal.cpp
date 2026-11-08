@@ -84,8 +84,8 @@ void SetupPortal::saveSettings() {
         server_.send(409, "text/plain", "Device is restarting");
         return;
     }
-    if (!server_.hasArg("ssid") || !server_.hasArg("password")) {
-        server_.send(400, "text/plain", "SSID and password are required");
+    if (!server_.hasArg("ssid") || !server_.hasArg("password") || !server_.hasArg("server")) {
+        server_.send(400, "text/plain", "SSID, password, and server URL are required");
         return;
     }
     const String ssid = server_.arg("ssid");
@@ -94,6 +94,19 @@ void SetupPortal::saveSettings() {
     if (ssid.length() != strlen(ssid.c_str()) || password.length() != strlen(password.c_str()) ||
         !wifi_settings::assign(credentials, ssid.c_str(), password.c_str())) {
         server_.send(400, "text/plain", "Invalid SSID or password length");
+        return;
+    }
+    const String serverUrl = server_.arg("server");
+    server_settings::ServerUrl server = {};
+    if (serverUrl.length() != strlen(serverUrl.c_str()) ||
+        !server_settings::assign(server, serverUrl.c_str())) {
+        server_.send(400, "text/plain", "Invalid server URL");
+        return;
+    }
+    // Wi-Fi settings are saved last because their presence ends setup mode.
+    if (!flash_.saveServer(server)) {
+        Serial.println("Failed to save server URL");
+        server_.send(500, "text/plain", "Could not save settings");
         return;
     }
     if (!flash_.save(credentials)) {

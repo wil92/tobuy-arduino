@@ -20,7 +20,7 @@ async function main() {
     const html = fs.readFileSync("frontend/setup.html", "utf8");
     const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
     const elements = Object.fromEntries(
-        ["config", "ssid", "password", "networks", "status", "refresh", "save"]
+        ["config", "ssid", "server", "password", "networks", "status", "refresh", "save"]
             .map(id => [id, new Element()])
     );
     const requests = [];
@@ -53,6 +53,15 @@ async function main() {
     assert.equal(requests.filter(request => request.url === "/").length, 0);
     assert.equal(elements.status.error, true);
 
+    elements.password.value = "12345678";
+    for (const bad of ["", "tobuy.net", "ftp://tobuy.net", "http://", "http://a b", "http://host:0", "http://host:70000", "http://host/path"]) {
+        elements.server.value = bad;
+        await submit({preventDefault() {}});
+        assert.equal(requests.filter(item => item.url === "/").length, 0, bad);
+        assert.equal(elements.status.error, true);
+    }
+
+    elements.server.value = " http://192.168.2.3:3000 ";
     elements.password.value = "p@ss word";
     saveStatus = 500;
     await submit({preventDefault() {}});
@@ -62,6 +71,7 @@ async function main() {
     assert.equal(request.options.method, "POST");
     assert.equal(request.options.body.get("ssid"), "network");
     assert.equal(request.options.body.get("password"), "p@ss word");
+    assert.equal(request.options.body.get("server"), "http://192.168.2.3:3000");
 
     saveStatus = 200;
     elements.password.value = "";

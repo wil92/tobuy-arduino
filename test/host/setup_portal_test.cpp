@@ -29,7 +29,7 @@ int main() {
 
     server.request("/", HTTP_GET);
     assert(server.code == 200 && server.contentType.find("text/html") == 0);
-    assert(server.body.find("Wi-Fi configuration") != std::string::npos);
+    assert(server.body.find("Device configuration") != std::string::npos);
     server.request("/scan", HTTP_POST);
     assert(server.code == 202);
     server.request("/refresh-ssid", HTTP_GET);
@@ -46,12 +46,17 @@ int main() {
     assert(server.code == 400 && preferences.saved.empty());
     server.args["ssid"] = "network";
     server.args["password"] = "short";
+    server.args["server"] = "http://tobuy.net";
     server.request("/", HTTP_POST);
     assert(server.code == 400 && preferences.saved.empty());
     server.args["password"] = "12345678";
+    server.args["server"] = "tobuy.net";
+    server.request("/", HTTP_POST);
+    assert(server.code == 400 && preferences.saved.empty() && preferences.server.empty());
+    server.args["server"] = "http://192.168.2.3:3000/";
     preferences.fail = true;
     server.request("/", HTTP_POST);
-    assert(server.code == 500 && preferences.saved.empty());
+    assert(server.code == 500 && preferences.saved.empty() && preferences.server.empty());
     preferences.fail = false;
     server.request("/", HTTP_POST);
     assert(server.code == 200 && preferences.saved.size() == sizeof(wifi_settings::Credentials));
@@ -59,6 +64,7 @@ int main() {
     std::memcpy(&saved, preferences.saved.data(), sizeof(saved));
     assert(std::strcmp(saved.ssid, "network") == 0);
     assert(std::strcmp(saved.password, "12345678") == 0);
+    assert(std::string(preferences.server.begin(), preferences.server.begin() + 24) == "http://192.168.2.3:3000" + std::string(1, '\0'));
     server.request("/", HTTP_POST);
     assert(server.code == 409);
     fakeMillis = 999;

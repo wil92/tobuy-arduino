@@ -69,6 +69,11 @@ The device restarts into setup mode after a successful reset. If a network
 password is incorrect or the network is unavailable, use this button to
 reconfigure it. Do not connect a button until the board's wiring is confirmed.
 
+The setup portal also asks for the tobuy server URL, such as
+`http://192.168.2.3:3000` or `http://tobuy.net` (`http`/`https`, host or IP,
+optional port; no path). It is stored in flash under the `server` key, next to
+the Wi-Fi settings, and is cleared by the reset button.
+
 The previous optional `include/wifi_credentials.h` is no longer used for
 network configuration. The ESP32 Arduino framework supplies WiFi, WebServer,
 and Preferences; no additional library dependencies are required. The firmware
@@ -102,6 +107,8 @@ g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/stubs -Ilib/network test/host/w
 /tmp/tobuy-wifi-connection-test
 g++ -std=c++11 -Wall -Wextra -Werror -Ilib/flash test/host/wifi_settings_test.cpp -o /tmp/tobuy-wifi-settings-test
 /tmp/tobuy-wifi-settings-test
+g++ -std=c++11 -Wall -Wextra -Werror -Ilib/flash test/host/server_settings_test.cpp -o /tmp/tobuy-server-settings-test
+/tmp/tobuy-server-settings-test
 g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/flash test/host/flash_manager_test.cpp lib/flash/flash_manager.cpp -o /tmp/tobuy-flash-test
 /tmp/tobuy-flash-test
 g++ -std=c++11 -Wall -Wextra -Werror -Itest/host/portal_stubs -Ilib/components test/host/reset_button_test.cpp -o /tmp/tobuy-reset-test
