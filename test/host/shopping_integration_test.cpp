@@ -14,6 +14,9 @@ WebSocketsClient *WebSocketsClient::instance = nullptr;
 int FakeHttp::code = 200;
 std::string FakeHttp::body;
 std::string FakeHttp::url;
+int FakeHttp::deleteCode = 200;
+std::string FakeHttp::deleteBody;
+std::string FakeHttp::method;
 std::vector<char> Preferences::saved;
 bool XPT2046_Touchscreen::down = false;
 TS_Point XPT2046_Touchscreen::point = {};
@@ -96,7 +99,7 @@ int main() {
     swipe(view, 30, 40, 79, 40);
     assert(hasText(display, "Milk") && socket.sent.empty());
     swipe(view, 230, 55, 190, 55);
-    assert(hasText(display, "1-5/10") && socket.sent.empty());
+    assert(hasText(display, "1-6/10") && socket.sent.empty());
     swipe(view, 120, 200, 180, 120);
     assert(hasText(display, "TO BUY") && hasText(display, "Item5"));
     touch(view, 230, 55);
@@ -108,6 +111,16 @@ int main() {
     view.update();
     assert(FakeHttp::url == "http://server:3000/temperature");
     assert(hasText(display, "12.3") && hasText(display, "C") && hasText(display, "London"));
+    const auto city = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                   [](const TFT_eSPI::TextDraw &draw) { return draw.value == "London"; });
+    const auto country = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                      [](const TFT_eSPI::TextDraw &draw) { return draw.value == "United Kingdom"; });
+    const auto reading = std::find_if(display.textDraws.begin(), display.textDraws.end(),
+                                      [](const TFT_eSPI::TextDraw &draw) { return draw.value == "12.3"; });
+    assert(city != display.textDraws.end() && country != display.textDraws.end() &&
+           reading != display.textDraws.end() && city->size == 2 && country->size == 2 &&
+           city->y + 32 <= country->y && country->y + 32 <= display.height() - 22 &&
+           reading->y + 52 * reading->size <= city->y);
     const uint16_t coolColor = display.screenColor;
     socket.event(WStype_TEXT, list(11, true));
     assert(hasText(display, "12.3") && !hasText(display, "Milk"));
@@ -181,27 +194,31 @@ int main() {
     assert(hasText(display, "Loading list"));
     client.update();
     assert(!Preferences::saved.empty() && hasText(display, "Milk") && hasText(display, "Item3"));
-    assert(hasText(display, "Item4") && !hasText(display, "Item5"));
+    assert(hasText(display, "Item5") && !hasText(display, "Item6"));
     auto milk = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                              [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Milk"; });
     auto missing = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                 [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Item1"; });
-    assert(milk != display.textDraws.end() && milk->size == 1 && milk->font == 1 && milk->x == 88);
+    assert(milk != display.textDraws.end() && milk->size == 1 && milk->font == 1 && milk->x == 53);
     assert(missing != display.textDraws.end() && missing->size == 1 && missing->font == 1 && missing->x == milk->x);
     display.setFreeFont(&FreeSans9pt7b);
     assert(display.fontHeight(1) == 22 && display.fontHeight(2) * 2 == 32);
     display.setTextFont(2);
     auto switchRect = std::find_if(display.rectangles.begin(), display.rectangles.end(),
                                    [](const TFT_eSPI::Rectangle &rect) {
-                                       return rect.x == 8 && rect.y == 34 && rect.width == 70 && rect.height == 40;
+                                       return rect.x == 8 && rect.y == 34 && rect.width == 35 && rect.height == 40;
                                    });
     assert(switchRect != display.rectangles.end());
     const uint16_t offColor = switchRect->color;
     assert(milk->x >= switchRect->x + switchRect->width);
     assert(milk->color == milk->background && milk->background != display.screenColor);
-    assert(std::count_if(display.circles.begin(), display.circles.end(),
-                         [](const TFT_eSPI::Circle &circle) { return !circle.filled; }) == 4);
-    assert(hasText(display, "1-5/10"));
+    assert(std::count(display.text.begin(), display.text.end(), "X") == 4);
+    auto removeRect = std::find_if(display.rectangles.begin(), display.rectangles.end(),
+                                   [](const TFT_eSPI::Rectangle &rect) {
+                                       return rect.x == 8 && rect.y == 84 && rect.width == 35 && rect.height == 40;
+                                   });
+    assert(removeRect != display.rectangles.end() && removeRect->color == 0xb904);
+    assert(hasText(display, "1-6/10"));
     const uint16_t connectedColor = textColor(display, "Connected");
     auto connected = std::find_if(display.textDraws.begin(), display.textDraws.end(),
                                   [](const TFT_eSPI::TextDraw &draw) { return draw.value == "Connected"; });
@@ -216,16 +233,16 @@ int main() {
     assert(display.circles.size() == connectedCircles.size());
     auto track = std::find_if(display.rectangles.begin(), display.rectangles.end(),
                               [](const TFT_eSPI::Rectangle &rect) {
-                                  return rect.x == 228 && rect.y == 30 && rect.width == 8 && rect.height == 250;
+                                  return rect.x == 228 && rect.y == 30 && rect.width == 8 && rect.height == 266;
                               });
     auto thumb = std::find_if(display.rectangles.begin(), display.rectangles.end(),
                               [](const TFT_eSPI::Rectangle &rect) {
-                                  return rect.x == 228 && rect.y == 30 && rect.width == 8 && rect.height < 250;
+                                  return rect.x == 228 && rect.y == 30 && rect.width == 8 && rect.height < 266;
                               });
     assert(track != display.rectangles.end() && thumb != display.rectangles.end());
-    auto down = std::find_if(display.textDraws.begin(), display.textDraws.end(),
-                             [](const TFT_eSPI::TextDraw &draw) { return draw.value == "DOWN"; });
-    assert(down != display.textDraws.end() && down->size == 1);
+    assert(!hasText(display, "UP") && !hasText(display, "DOWN"));
+    assert(std::none_of(display.rectangles.begin(), display.rectangles.end(),
+                        [](const TFT_eSPI::Rectangle &rect) { return rect.y >= 296; }));
 
     touch(view, 200, 40);
     assert(socket.sent.empty());
@@ -253,7 +270,7 @@ int main() {
     assert(hasText(display, "ON"));
     switchRect = std::find_if(display.rectangles.begin(), display.rectangles.end(),
                               [](const TFT_eSPI::Rectangle &rect) {
-                                  return rect.x == 8 && rect.y == 34 && rect.width == 70 && rect.height == 40;
+                                  return rect.x == 8 && rect.y == 34 && rect.width == 35 && rect.height == 40;
                               });
     assert(switchRect != display.rectangles.end() && switchRect->color != offColor);
     socket.event(WStype_TEXT, list(9, false));
@@ -264,13 +281,17 @@ int main() {
     assert(hasText(display, "Item3"));
     socket.event(WStype_TEXT,
                  R"({"type":"list","revision":14,"periodic":[{"id":"milk","name":"Very long item name","needed":true}],"missing":[]})");
-    assert(hasText(display, "Very long") && hasText(display, "item name"));
+    assert(hasText(display, "Very long item") && hasText(display, "name"));
     assert(std::none_of(display.rectangles.begin(), display.rectangles.end(),
                         [](const TFT_eSPI::Rectangle &rect) { return rect.x == 228 && rect.width == 8; }));
     socket.event(WStype_TEXT, list(15, true));
     touch(view, 200, 300);
-    assert(!hasText(display, "Milk") && hasText(display, "Item4") && hasText(display, "2-6/10"));
+    assert(hasText(display, "Milk") && hasText(display, "1-6/10"));
     touch(view, 20, 300);
+    assert(hasText(display, "Milk") && hasText(display, "1-6/10"));
+    swipe(view, 120, 200, 120, 150);
+    assert(!hasText(display, "Milk") && hasText(display, "2-7/10"));
+    swipe(view, 120, 150, 120, 200);
     assert(hasText(display, "Milk"));
     XPT2046_Touchscreen::point = {2300, 650, 100};
     XPT2046_Touchscreen::down = true;
@@ -281,9 +302,9 @@ int main() {
     view.update();
     assert(hasText(display, "Item9") && !hasText(display, "Milk"));
     touch(view, 230, 55);
-    assert(hasText(display, "Milk") && hasText(display, "1-5/10"));
+    assert(hasText(display, "Milk") && hasText(display, "1-6/10"));
     const std::string lastCommand = socket.sent;
-    touch(view, 30, 90);
+    touch(view, 50, 90);
     assert(socket.sent == lastCommand);
     XPT2046_Touchscreen::point = {1200, 2400, 100};
     XPT2046_Touchscreen::down = true;
@@ -346,7 +367,7 @@ int main() {
     socket.event(WStype_TEXT, longList);
     std::string wrapped;
     for (const auto &draw : display.textDraws) {
-        if (draw.font == 1 && draw.x == 88 && draw.value != "End") wrapped += draw.value;
+        if (draw.font == 1 && draw.x == 53 && draw.value != "End") wrapped += draw.value;
     }
     assert(wrapped == longName && hasText(display, "End"));
     const std::string twoPeriodic = R"({"type":"list","revision":4,"periodic":[{"id":"long","name":")" +
@@ -356,13 +377,114 @@ int main() {
     touch(view, 230, 55);
     assert(hasText(display, "Next"));
     socket.sendOk = true;
-    touch(view, 30, 180);
+    touch(view, 30, 140);
     assert(socket.sent.find("\"id\":\"next\"") != std::string::npos);
+    fakeMillis += 10000;
+    client.update();
+    FakeHttp::body = list(5, false);
+    client.update();
+    assert(client.ready());
     socket.event(WStype_TEXT, list(5, false));
     touch(view, 230, 55);
     socket.event(WStype_TEXT, R"({"type":"list","revision":6,"periodic":[],"missing":[]})");
-    assert(hasText(display, "No items") && hasText(display, "UP") && hasText(display, "DOWN"));
+    assert(hasText(display, "No items") && !hasText(display, "UP") && !hasText(display, "DOWN"));
     socket.event(WStype_TEXT, list(7, false));
+
+    const std::string missingList = R"({"type":"list","revision":8,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"a/b ?#%é","name":"Bread"},{"id":"other","name":"Tea"}]})";
+    const std::string removedList = R"({"type":"list","revision":9,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
+    socket.event(WStype_TEXT, missingList);
+    assert(!client.removeMissing(0));
+    touch(view, 50, 90);
+    assert(FakeHttp::method != "DELETE");
+    touch(view, 30, 90);
+    assert(hasText(display, "Saving") && hasText(display, "Bread"));
+    assert(!client.removeMissing(1) && !client.toggle(0));
+    FakeHttp::deleteBody = removedList;
+    runFakeTask(1);
+    assert(FakeHttp::method == "DELETE" &&
+           FakeHttp::url == "http://server:3000/tobuy/missing/a%2Fb%20%3F%23%25%C3%A9");
+    client.update();
+    assert(client.ready() && !hasText(display, "Bread") && hasText(display, "Tea"));
+
+    socket.event(WStype_TEXT, missingList);
+    assert(!hasText(display, "Bread"));
+    socket.event(WStype_TEXT, R"({"type":"list","revision":10,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})");
+    touch(view, 30, 90);
+    FakeHttp::deleteCode = 409;
+    runFakeTask(1);
+    FakeHttp::body = R"({"type":"list","revision":11,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
+    client.update();
+    assert(!client.ready() && hasText(display, "Update failed") && hasText(display, "Tea"));
+    fakeMillis += 5000;
+    client.update();
+    assert(client.ready() && hasText(display, "Tea") && FakeHttp::method == "GET");
+
+    touch(view, 30, 90);
+    FakeHttp::deleteCode = 200;
+    FakeHttp::deleteBody = R"({"type":"list","revision":12,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[]})";
+    socket.event(WStype_TEXT, FakeHttp::deleteBody);
+    runFakeTask(1);
+    client.update();
+    assert(client.ready() && !hasText(display, "Tea"));
+
+    socket.event(WStype_TEXT, R"({"type":"list","revision":13,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})");
+    touch(view, 30, 90);
+    FakeHttp::deleteBody = "{invalid";
+    runFakeTask(1);
+    client.update();
+    assert(!client.ready() && hasText(display, "Invalid response") && hasText(display, "Tea"));
+    FakeHttp::body = R"({"type":"list","revision":13,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
+    fakeMillis += 5000;
+    client.update();
+    assert(client.ready());
+
+    touch(view, 30, 90);
+    FakeHttp::deleteBody = FakeHttp::body;
+    runFakeTask(1);
+    client.update();
+    assert(!client.ready() && hasText(display, "Update timeout") && hasText(display, "Tea"));
+    fakeMillis += 5000;
+    client.update();
+    assert(client.ready());
+
+    touch(view, 30, 90);
+    socket.event(WStype_DISCONNECTED);
+    socket.event(WStype_CONNECTED);
+    FakeHttp::body = R"({"type":"list","revision":1,"periodic":[{"id":"milk","name":"Milk","needed":false}],"missing":[{"id":"other","name":"Tea"}]})";
+    client.update();
+    assert(!client.removeMissing(1) && hasText(display, "Tea"));
+    FakeHttp::deleteBody = R"({"type":"list","revision":99,"periodic":[],"missing":[]})";
+    runFakeTask(1);
+    client.update();
+    assert(client.list().revision == 1 && hasText(display, "Tea") && client.ready());
+
+    touch(view, 30, 90);
+    FakeHttp::deleteCode = 404;
+    runFakeTask(1);
+    client.update();
+    assert(!client.ready() && hasText(display, "Update failed"));
+    fakeMillis += 5000;
+    client.update();
+    assert(client.ready() && hasText(display, "Tea"));
+
+    touch(view, 30, 90);
+    FakeHttp::deleteCode = 200;
+    FakeHttp::deleteBody = std::string(shopping::max_message_length + 1, 'x');
+    runFakeTask(1);
+    client.update();
+    assert(!client.ready() && hasText(display, "Invalid response") && hasText(display, "Tea"));
+    fakeMillis += 5000;
+    client.update();
+    assert(client.ready());
+
+    WiFi.currentStatus = WL_DISCONNECTED;
+    client.update();
+    assert(!client.removeMissing(1) && hasText(display, "Tea"));
+    WiFi.currentStatus = WL_CONNECTED;
+    client.update();
+    socket.event(WStype_CONNECTED);
+    client.update();
+    assert(client.ready());
 
     TFT_eSPI secondDisplay;
     ShoppingView secondView(secondDisplay, client);

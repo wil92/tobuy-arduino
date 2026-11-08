@@ -15,16 +15,17 @@ commands.
 
 While the device is in Wi-Fi setup mode, the display shows the setup hotspot
 name, its password, and the setup page address. In normal mode it displays
-periodic items with ON/OFF switches and missing items without switches. ON
-means the periodic item is needed. Switches appear to the left of the larger
-item names. Tap a switch to request a change; the
-display waits for the server's updated list rather than changing it locally.
-Swipe vertically, drag the right-hand scrollbar, or tap UP/DOWN to scroll. Long
+periodic items with ON/OFF switches and non-periodic missing items with red X
+buttons. ON means the periodic item is needed. Controls appear to the left of
+the item names. Tap an X to mark a missing item completed in Google Keep; this
+does not permanently delete it. Periodic items cannot be removed this way.
+The display waits for the server's updated list rather than changing it locally.
+Swipe vertically or drag the right-hand scrollbar to scroll. Long
 item names wrap over multiple lines. The top-right status indicator shows
 connection and update errors; an animated indicator denotes connection attempts
-or a pending update. The last list may remain visible but switches are disabled
-while disconnected. The footer shows the visible item range and total; a small
-circle marks a read-only missing item.
+or a pending update. The last list may remain visible but controls are disabled
+while disconnected or another update is pending. The footer shows the visible
+item range and total.
 
 Swipe horizontally in either direction to switch between the shopping list
 and the current temperature in Celsius, with the server's city and country.

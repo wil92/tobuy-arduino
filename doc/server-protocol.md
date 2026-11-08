@@ -61,6 +61,24 @@ server message types are not supported. Connection failures are shown on the
 display and retried; HTTP requests have bounded network timeouts but can
 briefly pause touch handling.
 
+## Completing missing items
+
+The red X on a non-periodic item sends `DELETE /tobuy/missing/{id}`, with the
+UTF-8 ID percent-encoded as a path segment. The server marks that item checked
+in Google Keep; it does not permanently delete it. Periodic items cannot be
+completed through this endpoint.
+
+HTTP 200 returns the complete updated list, which is also broadcast over the
+WebSocket. The device applies the response only if it is valid and does not
+replace a newer list; it reports an error if the item is still present.
+Only one item update may be outstanding. The device keeps the old list until
+confirmation and fetches the latest list after a failed, invalid, or
+unconfirmed response. The server returns 400 for an invalid ID, 404 if the
+missing item is not found, 409 for a conflicting or unconfirmed update, 502
+for an upstream failure, and 503 when synchronization is unavailable. A timed
+out request can still take effect later. The DELETE request runs in a separate
+task with a 1.5-second connection timeout and 15-second read timeout.
+
 ## Temperature
 
 The temperature screen requests `GET /temperature` from the same HTTP server.

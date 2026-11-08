@@ -9,11 +9,12 @@
 namespace {
 constexpr uint32_t calibration_magic = 0x544f4259;
 constexpr int heading_height = 30;
-constexpr int footer_height = 40;
+constexpr int footer_height = 24;
+constexpr int temperature_location_area = 98;
 constexpr int row_height = 50;
 constexpr int switch_x = 8;
 constexpr int switch_y_offset = 4;
-constexpr int switch_width = 70;
+constexpr int switch_width = 35;
 constexpr int switch_height = 40;
 constexpr int item_text_x = switch_x + switch_width + 10;
 constexpr int item_font = 1;
@@ -28,7 +29,7 @@ constexpr uint16_t warning_color = 0xfce6;
 constexpr uint16_t error_color = 0xfbaa;
 constexpr uint16_t switch_on_color = 0x03c5;
 constexpr uint16_t switch_off_color = 0x4209;
-constexpr uint16_t button_color = 0x2946;
+constexpr uint16_t remove_color = 0xb904;
 constexpr unsigned long animation_interval_ms = 350;
 constexpr int page_swipe_distance = 50;
 
@@ -123,20 +124,22 @@ void ShoppingView::drawTemperature() {
             unitWidth = display_.textWidth("C", 1);
             degreeWidth = 9 * size;
             if (size == 1 || (numberWidth + degreeWidth + unitWidth <= display_.width() - 12 &&
-                              display_.fontHeight(1) <= display_.height() - heading_height - 75)) break;
+                              display_.fontHeight(1) <= display_.height() - heading_height - temperature_location_area)) break;
             --size;
         }
         const int left = (display_.width() - numberWidth - degreeWidth - unitWidth) / 2;
-        const int y = heading_height + (display_.height() - heading_height - 75 - display_.fontHeight(1)) / 2;
+        const int y = heading_height + (display_.height() - heading_height - temperature_location_area - display_.fontHeight(1)) / 2;
         display_.setTextColor(TFT_WHITE, color);
         display_.drawString(number, left, y, 1);
         display_.drawCircle(left + numberWidth + 4 * size, y + 5 * size, 3 * size, TFT_WHITE);
         display_.drawString("C", left + numberWidth + degreeWidth, y, 1);
-        display_.setTextSize(1);
         display_.setTextFont(2);
-        display_.setViewport(6, display_.height() - 65, display_.width() - 12, 38, false);
-        display_.drawString(temperature_.reading().city, 6, display_.height() - 65, 2);
-        display_.drawString(temperature_.reading().country, 6, display_.height() - 46, 2);
+        display_.setTextSize(2);
+        const int locationTop = display_.height() - temperature_location_area;
+        const int locationLineHeight = display_.fontHeight(2);
+        display_.setViewport(6, locationTop, display_.width() - 12, locationLineHeight * 2, false);
+        display_.drawString(temperature_.reading().city, 6, locationTop, 2);
+        display_.drawString(temperature_.reading().country, 6, locationTop + locationLineHeight, 2);
         display_.resetViewport();
     }
     display_.setTextSize(1);
@@ -278,16 +281,12 @@ void ShoppingView::render() {
             lineY += lineHeight;
         }
         display_.setTextFont(2);
-        if (item.periodic) {
-            const uint16_t color = item.needed ? switch_on_color : switch_off_color;
-            display_.fillRoundRect(switch_x, y + switch_y_offset, switch_width, switch_height, 8, color);
-            display_.setTextColor(TFT_WHITE, color);
-            const char *label = item.needed ? "ON" : "OFF";
-            display_.drawString(label, switch_x + (switch_width - display_.textWidth(label, 2)) / 2,
-                                y + switch_y_offset + (switch_height - display_.fontHeight(2)) / 2, 2);
-        } else {
-            display_.drawCircle(switch_x + switch_width / 2, y + row_height / 2, 5, muted_color);
-        }
+        const uint16_t color = item.periodic ? (item.needed ? switch_on_color : switch_off_color) : remove_color;
+        const char *label = item.periodic ? (item.needed ? "ON" : "OFF") : "X";
+        display_.fillRoundRect(switch_x, y + switch_y_offset, switch_width, switch_height, 8, color);
+        display_.setTextColor(TFT_WHITE, color);
+        display_.drawString(label, switch_x + (switch_width - display_.textWidth(label, 2)) / 2,
+                            y + switch_y_offset + (switch_height - display_.fontHeight(2)) / 2, 2);
     }
     display_.resetViewport();
     if (maximum > 0 && viewport > 0) {
@@ -299,12 +298,6 @@ void ShoppingView::render() {
         display_.fillRoundRect(trackX, thumbY, scrollbar_width, thumbHeight, 4, muted_color);
     }
     const int footer = display_.height() - footer_height;
-    display_.fillRoundRect(4, footer + 2, 68, 34, 5, button_color);
-    display_.fillRoundRect(display_.width() - 72, footer + 2, 68, 34, 5, button_color);
-    display_.setTextColor(scrollOffset_ ? TFT_WHITE : muted_color, button_color);
-    display_.drawString("UP", 25, footer + 10, 2);
-    display_.setTextColor(scrollOffset_ < maximum ? TFT_WHITE : muted_color, button_color);
-    display_.drawString("DOWN", display_.width() - 64, footer + 10, 2);
     char position[24];
     if (list.count && firstVisible < list.count) {
         std::snprintf(position, sizeof(position), "%u-%u/%u",
@@ -313,7 +306,7 @@ void ShoppingView::render() {
                       static_cast<unsigned>(list.count));
         display_.setTextColor(muted_color, background_color);
         display_.drawString(position, (display_.width() - display_.textWidth(position, 2)) / 2,
-                            footer + 10, 2);
+                            footer + 4, 2);
     }
 }
 
@@ -424,10 +417,6 @@ void ShoppingView::onRelease(int x, int y) {
     } else if (std::abs(delta) > 25) {
         scrollOffset_ = std::max(0, std::min(maximum, scrollOffset_ - delta));
         render();
-    } else if (horizontal < 15 && startY_ >= display_.height() - footer_height && y >= display_.height() - footer_height) {
-        if (x < display_.width() / 2) scrollOffset_ = std::max(0, scrollOffset_ - row_height);
-        else scrollOffset_ = std::min(maximum, scrollOffset_ + row_height);
-        render();
     } else if (startY_ >= heading_height && startY_ < display_.height() - footer_height &&
                std::abs(y - startY_) < 15 && horizontal < 15 &&
                startX_ >= switch_x && startX_ < switch_x + switch_width &&
@@ -437,7 +426,8 @@ void ShoppingView::onRelease(int x, int y) {
             if (startY_ >= switchTop && startY_ < switchTop + switch_height &&
                 y >= switchTop && y < switchTop + switch_height &&
                 y >= heading_height && y < heading_height + viewport) {
-                client_.toggle(i);
+                if (client_.list().items[i].periodic) client_.toggle(i);
+                else client_.removeMissing(i);
                 break;
             }
         }

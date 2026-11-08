@@ -7,17 +7,21 @@ struct FakeHttp {
     static int code;
     static std::string body;
     static std::string url;
+    static int deleteCode;
+    static std::string deleteBody;
+    static std::string method;
 };
 class HTTPClient {
 public:
     void setConnectTimeout(int) {}
     void setTimeout(int) {}
     bool begin(WiFiClient &, const String &url) { FakeHttp::url = url; return true; }
-    int GET() { return FakeHttp::code; }
+    int GET() { FakeHttp::method = "GET"; return FakeHttp::code; }
+    int sendRequest(const char *method) { FakeHttp::method = method; return FakeHttp::deleteCode; }
     int writeToStream(Stream *stream) {
-        const auto *data = reinterpret_cast<const uint8_t *>(FakeHttp::body.data());
-        return stream->write(data, FakeHttp::body.size()) == FakeHttp::body.size() ?
-               static_cast<int>(FakeHttp::body.size()) : -1;
+        const std::string &body = FakeHttp::method == "DELETE" ? FakeHttp::deleteBody : FakeHttp::body;
+        const auto *data = reinterpret_cast<const uint8_t *>(body.data());
+        return stream->write(data, body.size()) == body.size() ? static_cast<int>(body.size()) : -1;
     }
     void end() {}
 };

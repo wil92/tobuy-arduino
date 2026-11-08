@@ -11,6 +11,9 @@ unsigned long fakeMillis = 0;
 int FakeHttp::code = 200;
 std::string FakeHttp::body;
 std::string FakeHttp::url;
+int FakeHttp::deleteCode = 200;
+std::string FakeHttp::deleteBody;
+std::string FakeHttp::method;
 
 int main() {
     temperature::Reading reading;

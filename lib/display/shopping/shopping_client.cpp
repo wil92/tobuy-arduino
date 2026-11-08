@@ -12,6 +12,7 @@ constexpr unsigned long response_timeout_ms = 10000;
 
 class BoundedStream : public Stream {
 public:
+    explicit BoundedStream(char *buffer) : buffer_(buffer) {}
     size_t write(uint8_t value) override {
         if (length_ == shopping::max_message_length) return 0;
         buffer_[length_++] = static_cast<char>(value);
@@ -30,7 +31,7 @@ public:
     const char *data() const { return buffer_; }
     size_t size() const { return length_; }
 private:
-    char buffer_[shopping::max_message_length] = {};
+    char *buffer_;
     size_t length_ = 0;
 };
 }
@@ -56,8 +57,15 @@ void ShoppingClient::begin(const char *serverUrl, ChangeHandler onChange) {
 
 void ShoppingClient::update() {
     if (!configured_) return;
+    RemovalResult removal;
+    if (removalResults_ && xQueueReceive(removalResults_, &removal, 0) == pdTRUE) {
+        finishRemoval(removal);
+    }
     if (WiFi.status() != WL_CONNECTED) {
-        if (started_) socket_.disconnect();
+        if (started_) {
+            ++connectionGeneration_;
+            socket_.disconnect();
+        }
         started_ = connected_ = hasList_ = pending_ = false;
         setStatus("Wi-Fi unavailable", false);
         return;
@@ -99,6 +107,7 @@ void ShoppingClient::onEvent(WStype_t type, uint8_t *payload, size_t length) {
         lastFetch_ = millis() - retry_ms;
         setStatus("Loading list", false);
     } else if (type == WStype_DISCONNECTED) {
+        ++connectionGeneration_;
         connected_ = false;
         pending_ = false;
         setStatus("Server unavailable", false);
@@ -135,22 +144,23 @@ void ShoppingClient::fetchList() {
         setStatus("Server unavailable", false);
         return;
     }
-    std::unique_ptr<BoundedStream> body(new (std::nothrow) BoundedStream());
-    if (!body) {
+    std::unique_ptr<char[]> buffer(new (std::nothrow) char[shopping::max_message_length]);
+    if (!buffer) {
         http.end();
         Serial.println("Insufficient memory for shopping list response");
         setStatus("Out of memory", false);
         return;
     }
-    const int received = http.writeToStream(body.get());
+    BoundedStream body(buffer.get());
+    const int received = http.writeToStream(&body);
     http.end();
-    if (received < 0 || !acceptList(body->data(), body->size())) {
+    if (received < 0 || !acceptList(body.data(), body.size())) {
         Serial.println("Invalid shopping list HTTP response");
         setStatus("Invalid server response", false);
         return;
     }
     fetchPending_ = false;
-    setStatus(pending_ ? "Waiting for server" : "Connected", true);
+    setStatus(pending_ || removalPending_ ? "Waiting for server" : "Connected", true);
 }
 
 bool ShoppingClient::acceptList(const char *data, size_t length) {
@@ -174,7 +184,7 @@ bool ShoppingClient::acceptList(const char *data, size_t length) {
         }
     }
     if (!fetchPending_) {
-        const char *status = pending_ ? "Waiting for server" : "Connected";
+        const char *status = pending_ || removalPending_ ? "Waiting for server" : "Connected";
         const bool changed = std::strcmp(status_, status) != 0 || !ready_;
         setStatus(status, true);
         if (!changed) notify();
@@ -185,7 +195,8 @@ bool ShoppingClient::acceptList(const char *data, size_t length) {
 }
 
 bool ShoppingClient::toggle(size_t index) {
-    if (!ready_ || !connected_ || pending_ || index >= list_.count || !list_.items[index].periodic) return false;
+    if (!ready_ || !connected_ || pending_ || removalPending_ ||
+        index >= list_.count || !list_.items[index].periodic) return false;
     const shopping::Item &item = list_.items[index];
     StaticJsonDocument<256> message;
     message["type"] = "set_periodic";
@@ -206,6 +217,133 @@ bool ShoppingClient::toggle(size_t index) {
     pending_ = true;
     setStatus("Waiting for server", true);
     return true;
+}
+
+bool ShoppingClient::startRemovalWorker() {
+    if (removalRequests_) return true;
+    removalRequests_ = xQueueCreate(1, sizeof(RemovalRequest));
+    removalResults_ = xQueueCreate(1, sizeof(RemovalResult));
+    if (!removalRequests_ || !removalResults_ ||
+        xTaskCreate(removalWorker, "remove-item", 8192, this, 1, nullptr) != pdPASS) {
+        Serial.println("Could not start missing-item removal task");
+        if (removalRequests_) vQueueDelete(removalRequests_);
+        if (removalResults_) vQueueDelete(removalResults_);
+        removalRequests_ = removalResults_ = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool ShoppingClient::removeMissing(size_t index) {
+    if (!ready_ || !connected_ || pending_ || removalPending_ ||
+        index >= list_.count || list_.items[index].periodic) return false;
+    if (!startRemovalWorker()) {
+        setStatus("Update send failed", false);
+        fetchPending_ = true;
+        lastFetch_ = millis() - retry_ms;
+        return false;
+    }
+    RemovalRequest request = {};
+    std::strcpy(request.id, list_.items[index].id);
+    request.generation = connectionGeneration_;
+    if (xQueueSend(removalRequests_, &request, 0) != pdTRUE) {
+        Serial.println("Could not queue missing-item removal");
+        setStatus("Update send failed", false);
+        fetchPending_ = true;
+        lastFetch_ = millis() - retry_ms;
+        return false;
+    }
+    std::strcpy(removalId_, request.id);
+    removalPending_ = true;
+    setStatus("Waiting for server", true);
+    return true;
+}
+
+void ShoppingClient::removalWorker(void *context) {
+    auto *client = static_cast<ShoppingClient *>(context);
+    RemovalRequest request;
+    for (;;) {
+        if (xQueueReceive(client->removalRequests_, &request, portMAX_DELAY) == pdTRUE) {
+            RemovalResult result = client->sendRemoval(request);
+            if (xQueueSend(client->removalResults_, &result, portMAX_DELAY) != pdTRUE) {
+                Serial.println("Could not deliver missing-item removal result");
+                delete[] result.body;
+            }
+        }
+    }
+}
+
+ShoppingClient::RemovalResult ShoppingClient::sendRemoval(const RemovalRequest &request) {
+    RemovalResult result = {};
+    result.generation = request.generation;
+    char encoded[shopping::max_id_length * 3 + 1];
+    static const char hex[] = "0123456789ABCDEF";
+    size_t offset = 0;
+    for (const unsigned char *p = reinterpret_cast<const unsigned char *>(request.id); *p; ++p) {
+        const unsigned char c = *p;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '~') {
+            encoded[offset++] = static_cast<char>(c);
+        } else {
+            encoded[offset++] = '%';
+            encoded[offset++] = hex[c >> 4];
+            encoded[offset++] = hex[c & 15];
+        }
+    }
+    encoded[offset] = '\0';
+    WiFiClient connection;
+    HTTPClient http;
+    http.setConnectTimeout(1500);
+    http.setTimeout(15000);
+    if (!http.begin(connection, serverUrl_ + "/tobuy/missing/" + encoded)) {
+        Serial.println("Could not start missing-item removal");
+        return result;
+    }
+    result.code = http.sendRequest("DELETE");
+    if (result.code == HTTP_CODE_OK) {
+        result.body = new (std::nothrow) char[shopping::max_message_length];
+        if (result.body) {
+            BoundedStream body(result.body);
+            const int received = http.writeToStream(&body);
+            if (received >= 0) result.length = body.size();
+        } else {
+            Serial.println("Insufficient memory for removal response");
+        }
+    }
+    http.end();
+    return result;
+}
+
+void ShoppingClient::finishRemoval(const RemovalResult &result) {
+    std::unique_ptr<char[]> body(result.body);
+    if (result.generation != connectionGeneration_ || !connected_ || WiFi.status() != WL_CONNECTED) {
+        removalPending_ = false;
+        Serial.println("Discarding removal response after disconnect");
+        fetchPending_ = true;
+        lastFetch_ = millis() - retry_ms;
+        return;
+    }
+    if (result.code != HTTP_CODE_OK || !result.body || !result.length ||
+        !acceptList(result.body, result.length)) {
+        removalPending_ = false;
+        Serial.printf("Missing-item removal failed: HTTP %d\n", result.code);
+        setStatus(result.code == HTTP_CODE_OK ? "Invalid server response" : "Update send failed", false);
+        fetchPending_ = true;
+        lastFetch_ = millis();
+        return;
+    }
+    for (size_t i = 0; i < list_.count; ++i) {
+        if (std::strcmp(list_.items[i].id, removalId_) == 0) {
+            removalPending_ = false;
+            Serial.println("Missing-item removal not confirmed");
+            setStatus("Update not confirmed", false);
+            fetchPending_ = true;
+            lastFetch_ = millis();
+            return;
+        }
+    }
+    removalPending_ = false;
+    if (!fetchPending_) setStatus("Connected", true);
 }
 
 void ShoppingClient::setStatus(const char *status, bool ready) {
