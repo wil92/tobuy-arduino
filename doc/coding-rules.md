@@ -11,6 +11,9 @@ follow the conventions below.
 - Put reusable firmware modules in `lib/`, grouped by responsibility
   (for example, `lib/network/`, `lib/display/`, and `lib/flash/`).
 - Put host-side tests and their hardware stubs in `test/host/`.
+- Put detailed documentation in focused, topic-based files under `doc/`.
+  Keep the root `README.md` concise as a project overview and documentation
+  index, with links to relevant guides rather than duplicated details.
 - Use `snake_case` for source and test file names, including `.h` and `.cpp`
   files. Use the conventional `README.md` name for readme documents.
   Keep a header and its implementation on the same base name, such as
@@ -97,7 +100,7 @@ follow the conventions below.
   hardware. Keep tests deterministic and use the existing stubs for Arduino
   dependencies where appropriate.
 - Build firmware changes with `pio run -e esp32dev`. Run applicable host tests
-  as documented in the root `README.md`.
+  as documented in [development.md](development.md).
 - Do not upload firmware or run hardware-dependent tests without a suitable
   device and authorization.
 - Update the relevant documentation when configuration, setup, or

@@ -25,6 +25,8 @@ project and its hardware constraints.
   Ask for missing hardware or protocol details when they affect implementation.
 - Keep secrets out of source control and avoid hard-coding credentials.
 - Add or update tests and documentation when behavior changes.
+- Keep detailed documentation in focused files under `doc/`; keep the root
+  `README.md` as a concise overview and link to relevant documentation.
 
 ## Skills
 
