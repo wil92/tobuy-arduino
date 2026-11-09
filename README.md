@@ -8,6 +8,13 @@ The `esp32dev` PlatformIO environment uses Arduino and targets the
 [LCDWiki 2.8-inch ESP32-32E display](https://www.lcdwiki.com/2.8inch_ESP32-32E_Display)
 (E32R28T / E32N28T). The touchscreen features require the E32R28T.
 
+![front view of the device](doc/front-picture.png)
+![back view of the device](doc/back-picture.png)
+
+## 3d printed case
+
+In the `3d/` folder are STL files for a 3D-printed case. The box and lip pieces are designed.
+
 ## Documentation
 
 - [Device setup and operation](doc/device-setup.md): Wi-Fi, display, touch
