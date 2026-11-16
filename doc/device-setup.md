@@ -26,7 +26,21 @@ item names wrap over multiple lines. The top-right status indicator shows
 connection and update messages in Spanish; an animated indicator denotes
 connection attempts or a pending update. The last list may remain visible but controls are disabled
 while disconnected or another update is pending. The footer shows the visible
-item range and total.
+item range and total. Needed periodic items and missing items appear first,
+followed by periodic items marked NO. Within each group, names are ordered
+alphabetically without regard to ASCII letter case or the supported accents.
+Names that compare equally retain the order supplied by the server.
+
+Tap the magnifying glass in the bottom-left corner to open the alphabet
+keyboard. Enter up to 64 letters and spaces, use **<-** to erase a character,
+and tap **Buscar** to apply the substring filter and close the keyboard.
+Matching ignores ASCII letter case and the accents supported by the display;
+for example, `cafe` matches `café`. **Salir** closes the keyboard without
+changing the active filter. The list continues to update while filtered; a
+message appears if nothing matches. Tap the X next to the magnifying glass to
+clear an active filter. The X is hidden when no filter is active. The keyboard
+accepts unaccented Latin letters and spaces; other characters cannot be entered.
+For unsupported non-ASCII characters, ordering uses their UTF-8 bytes.
 
 Swipe horizontally in either direction to switch between the shopping list
 and the current temperature in Celsius, with the server's city and country.

@@ -33,6 +33,10 @@ constexpr uint16_t switch_off_color = 0x4209;
 constexpr uint16_t remove_color = 0xb904;
 constexpr unsigned long animation_interval_ms = 350;
 constexpr int page_swipe_distance = 50;
+constexpr int footer_button_width = 28;
+constexpr int keyboard_top = 54;
+constexpr int keyboard_row_height = 48;
+constexpr const char *keyboard_rows[] = {"qwertyuiop", "asdfghjkl", "zxcvbnm"};
 
 enum class Accent : uint8_t {
     none,
@@ -149,6 +153,43 @@ bool toDisplayText(const char *text, char *output, size_t outputSize,
     }
     output[outputLength] = '\0';
     return true;
+}
+
+void normalizedName(const char *name, char *output, size_t size) {
+    size_t length = 0;
+    while (*name) {
+        uint32_t codepoint;
+        const size_t consumed = decodeCodepoint(name, codepoint);
+        Accent accent;
+        char character = codepoint < 0x80 ? static_cast<char>(codepoint) : displayCharacter(codepoint, accent);
+        if (codepoint == 0x00df || codepoint == 0x1e9e) {
+            if (length + 2 >= size) break;
+            output[length++] = 's';
+            output[length++] = 's';
+        } else if (codepoint < 0x80 || character != '?') {
+            if (length + 1 >= size) break;
+            if (character >= 'A' && character <= 'Z') character += 'a' - 'A';
+            output[length++] = character;
+        } else {
+            if (length + consumed >= size) break;
+            std::memcpy(output + length, name, consumed);
+            length += consumed;
+        }
+        name += consumed;
+    }
+    if (*name) Serial.println("Shopping name exceeds search buffer");
+    output[length] = '\0';
+}
+
+bool itemBefore(const shopping::Item &a, const shopping::Item &b) {
+    const bool enabledA = !a.periodic || a.needed;
+    const bool enabledB = !b.periodic || b.needed;
+    if (enabledA != enabledB) return enabledA;
+    char nameA[shopping::max_name_length * 2 + 1];
+    char nameB[shopping::max_name_length * 2 + 1];
+    normalizedName(a.name, nameA, sizeof(nameA));
+    normalizedName(b.name, nameB, sizeof(nameB));
+    return std::strcmp(nameA, nameB) < 0;
 }
 
 void drawAccent(TFT_eSPI &display, const AccentMark &mark, int x, int y, int scale, uint16_t color) {
@@ -354,25 +395,104 @@ int ShoppingView::viewportHeight() const {
 }
 
 int ShoppingView::maxScroll() const {
-    return std::max(0, itemOffsets_[client_.list().count] - viewportHeight());
+    return std::max(0, itemOffsets_[visibleCount_] - viewportHeight());
 }
 
 void ShoppingView::updateLayout() {
     const shopping::List &list = client_.list();
+    visibleCount_ = 0;
+    char filter[shopping::max_name_length * 2 + 1];
+    normalizedName(filter_, filter, sizeof(filter));
+    for (size_t i = 0; i < list.count; ++i) {
+        char name[shopping::max_name_length * 2 + 1];
+        normalizedName(list.items[i].name, name, sizeof(name));
+        if (!std::strstr(name, filter)) continue;
+        size_t position = visibleCount_;
+        while (position > 0 && itemBefore(list.items[i], list.items[visibleItems_[position - 1]])) {
+            visibleItems_[position] = visibleItems_[position - 1];
+            --position;
+        }
+        visibleItems_[position] = i;
+        ++visibleCount_;
+    }
     const int textWidth = std::max(1, display_.width() - item_text_x - scrollbar_width - 2 * scrollbar_margin);
     display_.setTextSize(1);
     display_.setFreeFont(&FreeSans9pt7b);
     const int lineHeight = display_.fontHeight(item_font);
     itemOffsets_[0] = 0;
-    for (size_t i = 0; i < list.count; ++i) {
+    for (size_t i = 0; i < visibleCount_; ++i) {
         size_t offset = 0;
         int lines = 0;
         char line[shopping::max_name_length + 1];
-        while (nextLine(display_, list.items[i].name, offset, textWidth, line)) ++lines;
+        while (nextLine(display_, list.items[visibleItems_[i]].name, offset, textWidth, line)) ++lines;
         itemOffsets_[i + 1] = itemOffsets_[i] + std::max(row_height, lines * lineHeight + 10);
     }
     scrollOffset_ = std::min(scrollOffset_, maxScroll());
     display_.setTextFont(2);
+}
+
+void ShoppingView::drawKeyboard() {
+    display_.fillScreen(background_color);
+    display_.setTextDatum(TL_DATUM);
+    display_.setTextFont(2);
+    display_.setTextSize(1);
+    display_.setTextColor(TFT_WHITE, background_color);
+    display_.drawString("Buscar", 8, 6, 2);
+    display_.setViewport(8, 28, display_.width() - 16, 20, false);
+    const size_t length = std::strlen(searchDraft_);
+    const size_t visible = static_cast<size_t>(std::max(1, (display_.width() - 16) / 8));
+    display_.drawString(searchDraft_ + (length > visible ? length - visible : 0), 8, 28, 2);
+    display_.resetViewport();
+    const int keyWidth = display_.width() / 10;
+    for (int row = 0; row < 3; ++row) {
+        const char *keys = keyboard_rows[row];
+        for (size_t col = 0; keys[col]; ++col) {
+            const int x = static_cast<int>(col) * keyWidth;
+            const int y = keyboard_top + row * keyboard_row_height;
+            display_.fillRoundRect(x + 1, y + 1, keyWidth - 2, keyboard_row_height - 2, 4, card_color);
+            char label[] = {keys[col], '\0'};
+            display_.setTextColor(TFT_WHITE, card_color);
+            display_.drawString(label, x + (keyWidth - display_.textWidth(label, 2)) / 2, y + 15, 2);
+        }
+    }
+    const int y = keyboard_top + 3 * keyboard_row_height;
+    const char *labels[] = {"Espacio", "<-", "Buscar", "Salir"};
+    for (int i = 0; i < 4; ++i) {
+        const int left = i * display_.width() / 4;
+        const int right = (i + 1) * display_.width() / 4;
+        display_.fillRoundRect(left + 1, y + 1, right - left - 2, keyboard_row_height - 2, 4, card_color);
+        display_.setTextColor(TFT_WHITE, card_color);
+        display_.drawString(labels[i], left + (right - left - display_.textWidth(labels[i], 2)) / 2, y + 15, 2);
+    }
+}
+
+void ShoppingView::handleKeyboardTouch(int x, int y) {
+    const int row = (y - keyboard_top) / keyboard_row_height;
+    if (y < keyboard_top || row > 3) return;
+    size_t length = std::strlen(searchDraft_);
+    if (row < 3) {
+        const int column = x / (display_.width() / 10);
+        if (column < 0 || static_cast<size_t>(column) >= std::strlen(keyboard_rows[row])) return;
+        if (length < shopping::max_name_length) {
+            searchDraft_[length] = keyboard_rows[row][column];
+            searchDraft_[length + 1] = '\0';
+        }
+    } else {
+        const int button = x * 4 / display_.width();
+        if (button == 0 && length < shopping::max_name_length) {
+            searchDraft_[length] = ' ';
+            searchDraft_[length + 1] = '\0';
+        } else if (button == 1 && length) {
+            searchDraft_[length - 1] = '\0';
+        } else if (button == 2) {
+            std::strcpy(filter_, searchDraft_);
+            scrollOffset_ = 0;
+            keyboardVisible_ = false;
+        } else if (button == 3) {
+            keyboardVisible_ = false;
+        }
+    }
+    render();
 }
 
 void ShoppingView::drawStatus() {
@@ -419,6 +539,10 @@ void ShoppingView::render() {
         drawTemperature();
         return;
     }
+    if (keyboardVisible_) {
+        drawKeyboard();
+        return;
+    }
     const shopping::List &list = client_.list();
     updateLayout();
     const int viewport = viewportHeight();
@@ -431,17 +555,19 @@ void ShoppingView::render() {
     drawStatus();
     display_.drawFastHLine(8, heading_height - 2, display_.width() - 16, separator_color);
     display_.setTextColor(muted_color, background_color);
-    if (list.count == 0 && client_.ready()) display_.drawString("No items", 12, heading_height + 14, 2);
-    size_t firstVisible = list.count;
+    if (visibleCount_ == 0 && client_.ready()) {
+        display_.drawString(filter_[0] ? "Sin resultados" : "No items", 12, heading_height + 14, 2);
+    }
+    size_t firstVisible = visibleCount_;
     size_t lastVisible = 0;
     display_.setViewport(0, heading_height, display_.width(), viewport, false);
-    for (size_t i = 0; i < list.count; ++i) {
+    for (size_t i = 0; i < visibleCount_; ++i) {
         const int y = heading_height + itemOffsets_[i] - scrollOffset_;
         const int height = itemOffsets_[i + 1] - itemOffsets_[i];
         if (itemOffsets_[i + 1] <= scrollOffset_ || itemOffsets_[i] >= scrollOffset_ + viewport) continue;
-        if (firstVisible == list.count) firstVisible = i;
+        if (firstVisible == visibleCount_) firstVisible = i;
         lastVisible = i + 1;
-        const shopping::Item &item = list.items[i];
+        const shopping::Item &item = list.items[visibleItems_[i]];
         display_.fillRoundRect(4, y + 1, display_.width() - scrollbar_width - 3 * scrollbar_margin, height - 3, 5, card_color);
         display_.setFreeFont(&FreeSans9pt7b);
         display_.setTextColor(TFT_WHITE, TFT_WHITE);
@@ -465,19 +591,27 @@ void ShoppingView::render() {
     display_.resetViewport();
     if (maximum > 0 && viewport > 0) {
         const int trackX = display_.width() - scrollbar_width - scrollbar_margin;
-        const int total = itemOffsets_[list.count];
+        const int total = itemOffsets_[visibleCount_];
         const int thumbHeight = std::max(16, viewport * viewport / total);
         const int thumbY = heading_height + (viewport - thumbHeight) * scrollOffset_ / maximum;
         display_.fillRoundRect(trackX, heading_height, scrollbar_width, viewport, 4, separator_color);
         display_.fillRoundRect(trackX, thumbY, scrollbar_width, thumbHeight, 4, muted_color);
     }
     const int footer = display_.height() - footer_height;
+    display_.fillRoundRect(4, footer + 2, 22, 20, 3, card_color);
+    display_.drawCircle(12, footer + 9, 5, TFT_WHITE);
+    display_.drawLine(16, footer + 13, 21, footer + 18, TFT_WHITE);
+    if (filter_[0]) {
+        display_.fillRoundRect(32, footer + 2, 22, 20, 3, card_color);
+        display_.drawLine(38, footer + 7, 48, footer + 17, TFT_WHITE);
+        display_.drawLine(48, footer + 7, 38, footer + 17, TFT_WHITE);
+    }
     char position[24];
-    if (list.count && firstVisible < list.count) {
+    if (visibleCount_ && firstVisible < visibleCount_) {
         std::snprintf(position, sizeof(position), "%u-%u/%u",
                       static_cast<unsigned>(firstVisible + 1),
                       static_cast<unsigned>(lastVisible),
-                      static_cast<unsigned>(list.count));
+                      static_cast<unsigned>(visibleCount_));
         display_.setTextColor(muted_color, background_color);
         display_.drawString(position, (display_.width() - display_.textWidth(position, 2)) / 2,
                             footer + 4, 2);
@@ -503,7 +637,7 @@ bool ShoppingView::mapTouch(const TS_Point &point, int &x, int &y) const {
 void ShoppingView::update() {
     if (!touchReady_) return;
     if (temperature_.update(calibrated_ && temperatureVisible_) && calibrated_ && temperatureVisible_) render();
-    if (calibrated_ && !temperatureVisible_ && statusPresentation(client_.status()).animated &&
+    if (calibrated_ && !temperatureVisible_ && !keyboardVisible_ && statusPresentation(client_.status()).animated &&
         static_cast<unsigned long>(millis() - lastAnimationAt_) >= animation_interval_ms) {
         lastAnimationAt_ = millis();
         animationFrame_ = (animationFrame_ + 1) % 4;
@@ -547,7 +681,7 @@ void ShoppingView::update() {
                 }
                 lastX_ = x;
                 lastY_ = y;
-                if (!temperatureVisible_ && startX_ < 73 && x < 73 && startY_ < 25 && y < 25 &&
+                if (!temperatureVisible_ && !keyboardVisible_ && startX_ < 73 && x < 73 && startY_ < 25 && y < 25 &&
                     static_cast<unsigned long>(millis() - touchStartedAt_) >= 3000) {
                     calibrated_ = false;
                     calibrationStep_ = 0;
@@ -566,6 +700,10 @@ void ShoppingView::update() {
 void ShoppingView::onRelease(int x, int y) {
     const int horizontal = std::abs(x - startX_);
     const int vertical = std::abs(y - startY_);
+    if (keyboardVisible_) {
+        if (horizontal < 15 && vertical < 15) handleKeyboardTouch(x, y);
+        return;
+    }
     if (horizontal >= page_swipe_distance && horizontal > vertical) {
         temperatureVisible_ = !temperatureVisible_;
         temperature_.update(temperatureVisible_);
@@ -574,7 +712,21 @@ void ShoppingView::onRelease(int x, int y) {
     }
     if (temperatureVisible_) return;
     if (horizontal >= 15 && vertical <= 25) return;
-    const size_t count = client_.list().count;
+    if (startY_ >= display_.height() - footer_height && y >= display_.height() - footer_height &&
+        horizontal < 15 && vertical < 15) {
+        if (startX_ < footer_button_width && x < footer_button_width) {
+            std::strcpy(searchDraft_, filter_);
+            keyboardVisible_ = true;
+            render();
+        } else if (filter_[0] && startX_ >= footer_button_width && startX_ < 2 * footer_button_width &&
+                   x >= footer_button_width && x < 2 * footer_button_width) {
+            filter_[0] = '\0';
+            scrollOffset_ = 0;
+            render();
+        }
+        return;
+    }
+    const size_t count = visibleCount_;
     const int viewport = viewportHeight();
     if (viewport == 0) return;
     const int maximum = maxScroll();
@@ -605,8 +757,9 @@ void ShoppingView::onRelease(int x, int y) {
             if (startY_ >= switchTop && startY_ < switchTop + switch_height &&
                 y >= switchTop && y < switchTop + switch_height &&
                 y >= heading_height && y < heading_height + viewport) {
-                if (client_.list().items[i].periodic) client_.toggle(i);
-                else client_.removeMissing(i);
+                const size_t index = visibleItems_[i];
+                if (client_.list().items[index].periodic) client_.toggle(index);
+                else client_.removeMissing(index);
                 break;
             }
         }

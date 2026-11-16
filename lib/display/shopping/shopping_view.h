@@ -28,6 +28,8 @@ private:
     void drawCalibration();
     void drawStatus();
     void drawTemperature();
+    void drawKeyboard();
+    void handleKeyboardTouch(int x, int y);
     bool mapTouch(const TS_Point &point, int &x, int &y) const;
     void onRelease(int x, int y);
     void updateLayout();
@@ -48,6 +50,9 @@ private:
     bool touched_ = false;
     bool calibrationPress_ = false;
     bool temperatureVisible_ = false;
+    bool keyboardVisible_ = false;
+    char filter_[shopping::max_name_length + 1] = {};
+    char searchDraft_[shopping::max_name_length + 1] = {};
     int startX_ = 0;
     int startY_ = 0;
     int lastX_ = 0;
@@ -56,5 +61,7 @@ private:
     unsigned long lastAnimationAt_ = 0;
     uint8_t animationFrame_ = 0;
     int itemOffsets_[shopping::max_items + 1] = {};
+    size_t visibleItems_[shopping::max_items] = {};
+    size_t visibleCount_ = 0;
     int scrollOffset_ = 0;
 };
